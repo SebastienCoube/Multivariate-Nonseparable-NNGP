@@ -28,6 +28,9 @@ Rcov.uij = function(u,i,j,param.Rcov,A,b){
   return(cv*Sij)
 }
 
+Rcov.uij(u = -1, i = 1, j = 3, param.Rcov = c(1,1), A = c(.999, .9999, .99999), b = .5)
+
+
 Rcov = function(u,param.Rcov,A,b){
   # Computes the temporal covariance for all time lags and all variables
   # Returns an array [U x p x p]
@@ -99,6 +102,18 @@ MultiGM = function(h,u,rho,param.gamma0,param.Rcov,a,nu,delta,A,b){
   }
   return(M)
 }
+
+
+h = dist(cbind(1, rnorm(40)))
+u = dist(cbind(1, rnorm(40)))
+rho = matrix(c(1, .5, .5, 1), 2)
+a = sqrt(outer(c(1, .5), c(1, .5), "+"))
+nu = outer(c(.8, .5), c(.8, .5), "+")
+b = .5
+A = c(.8, .5)
+delta = 1
+param.gamma0 = c(.5, .5)
+param.Rcov = c(2, .5)
 
 MultiGM.hu = function(h,u,rho,param.gamma0,param.Rcov,a,nu,delta,A,b){
   # Computes the full covariance matrix of spatio-temporal function at (h,u)

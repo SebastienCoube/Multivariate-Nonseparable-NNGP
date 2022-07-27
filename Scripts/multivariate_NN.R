@@ -1,24 +1,47 @@
+remove(list = ls(
+  
+))
 
-
-locs = matrix(runif(1000), ncol = 2)
-var_tag = 1 + floor(5 * runif(i)) ; var_tag = match(var_tag, unique(var_tag))
-m_whatever_closest = 5
-m_same_var = 5
+# test data
+locs = matrix(runif(500), ncol = 2)
+var_tag = 1 + floor(2 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
+m_whatever_closest = 10
+m_same_var = 3
 m_other_vars = 2
 
-i = 20
-plot(locs[seq(i),], pch = var_tag[seq(i)])
-points(locs[i,,drop =F], col = 2, pch = var_tag[i])
-points(locs[NNarrays_same_var[[1]][[i]],], col = 3)
-points(locs[NNarrays_same_var[[2]][[i]],], col = 4)
-points(locs[NNarrays_same_var[[3]][[i]],], col = 5)
-points(locs[NNarrays_same_var[[4]][[i]],], col = 6)
-points(locs[NNarrays_same_var[[5]][[i]],], col = 7)
+# test for neighbors from one variable (run inside of function)
+i = 13
+plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+points(locs[i,, drop = F], cex=1, col = var_tag[i])
+points(locs[NNlists_quotas[[i]],], cex=1, col = var_tag[NNlists_quotas[[i]]])
+points(locs[NNlist_closest[[i]],], cex=1, col = 3)
 
-# var_tag must be integer and unique(var_tag) must be increasinf
 
+# test for stratified neighbors
+NNarray = find_ordered_nn_multi(locs, m_whatever_closest = 10, m_same_var = 5, m_other_vars = 2, var_tag = var_tag, locs = locs)
+i = 4
+plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+points(locs[i,, drop = F], cex=1, col = var_tag[i])
+points(locs[NNlist[[i]],], cex=1, col = 3)
+
+
+# wierd test data
+locs = matrix(runif(500), ncol = 2)
+var_tag = 1 + (locs[,1]<.5);var_tag = 1 + (var_tag!=var_tag[1])
+m_whatever_closest = 10
+m_same_var = 3
+m_other_vars = 2
+
+# test for stratified neighbors
+NNlist = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag, locs = locs)
+i = 200
+plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+points(locs[i,, drop = F], cex=1, col = var_tag[i])
+points(locs[NNlist[[i]],], cex=1, col = 3)
+
+# var_tag must be integer and unique(var_tag) must be increasing
 find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE, space_time = FALSE, st_scale = NULL){
-  
+  if(m_whatever_closest==0 & m_same_var==0)return(GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat, st_scale = st_scale))
   # number of locations
   n <- nrow(locs)
   nvar = length(unique(var_tag))
@@ -29,38 +52,6 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
   ee <- min(apply( locs, 2, stats::sd ))
   locs <- locs + matrix( ee*1e-4*stats::rnorm(n*ncol(locs)), n, ncol(locs) ) 
   
-  if(lonlat){ # convert lonlattime to xyztime or lonlat to xyz
-    lon <- locs[,1]
-    lat <- locs[,2]
-    lonrad <- lon*2*pi/360
-    latrad <- (lat+90)*2*pi/360
-    x <- sin(latrad)*cos(lonrad)
-    y <- sin(latrad)*sin(lonrad)
-    z <- cos(latrad)
-    if(space_time){
-      time <- locs[,3]
-      locs <- cbind(x,y,z,time)
-    } else {
-      locs <- cbind(x,y,z)
-    }
-  }
-  
-  
-  if(space_time){ 
-    d <- ncol(locs)-1
-    if( is.null(st_scale) ){
-      randinds <- sample(1:n, min(n,200))
-      dvec <- c(fields::rdist( locs[randinds,1:d,drop=FALSE] ))
-      dvec <- dvec[ dvec > 0]
-      med1 <- mean(dvec)
-      dvec <- c(fields::rdist( locs[randinds, d + 1, drop=FALSE] ))
-      dvec <- dvec[ dvec > 0]
-      med2 <- mean(dvec)
-      st_scale <- c(med1,med2)
-    }
-    locs[ , 1:d] <- locs[ , 1:d]/st_scale[1]
-    locs[ , d+1] <- locs[ , d+1]/st_scale[2]
-  }
   
   # splitting location according to variable tag
   locs_split_by_var = lapply(unique(var_tag), function(tag)locs[var_tag == tag, ,drop = FALSE])
@@ -69,86 +60,79 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
   number_available_parents_by_var = apply(sapply(unique(var_tag), function(tag)var_tag == tag), 2, function(x) (cumsum(x)-1))
   number_available_parents_by_var = pmax(number_available_parents_by_var, 0)
 
-  # getting bounds to end the brute force searches
-  maxval_per_variable = apply(number_available_parents_by_var, 2, function(x)match(max(m_other_vars, m_same_var), x)+1)
-  required_parents = matrix(m_other_vars, n, nvar);required_parents[cbind(seq(n), var_tag), drop = F] = m_same_var
-  available_parents_whatever_closest = number_available_parents_by_var - required_parents; available_parents_whatever_closest = pmax(available_parents_whatever_closest, 0)
+  # first search for quotas NNs
+  # then search for whatever closest NNs
+  # number of parents for each quota
+  required_parents_by_var = matrix(m_other_vars, n, nvar);required_parents_by_var[cbind(seq(n), var_tag)] = m_same_var
+  obtained_parents_by_var = pmin(required_parents_by_var, number_available_parents_by_var)
+   # number of parents for whatever closest
+  obtained_parents_whatever_closest = seq(n)-1 - apply(required_parents_by_var, 1, sum)
+  obtained_parents_whatever_closest = pmin(obtained_parents_whatever_closest, m_whatever_closest)
+  obtained_parents_whatever_closest = pmax(obtained_parents_whatever_closest, 0)
+   # number of available parents left once the quotas are filled
+  available_parents_whatever_closest = number_available_parents_by_var - required_parents_by_var; available_parents_whatever_closest = pmax(available_parents_whatever_closest, 0)
   available_parents_whatever_closest  = apply(available_parents_whatever_closest, 1, sum)
-  maxval_whatever_closest = max(which(available_parents_whatever_closest <= m_whatever_closest))+1
+   # checking when the available closest parents are more than the requirement
   
-
-  # to store the nearest neighbor indices
-  NNarray <- matrix(NA,n,min(n, m_whatever_closest+ m_same_var+ m_other_vars)+1)
-  
-  # Start with quotas NNarrays
-  # do first by brute force  
-  NNarrays_same_var = list()
-  if(m_same_var>0 | m_other_vars>0)
+  # Start with quotas NNlists
+  NNlists_quotas = list()
+  for(i in seq(nvar))
   {
-    for(i in seq(nvar))
-    {
-      data_inds = which(var_tag[seq(maxval_per_variable[i])]==i)
-      dmat = fields::rdist(locs[data_inds,,drop = F], locs[seq(maxval_per_variable[i]),,drop = F])
-      dmat[
-      matrix(data_inds, ncol = 1)  %x% matrix(1, 1, maxval_per_variable[i])>=#parent index
-      col(dmat)#child index
-      ] = Inf # forbidding locations coming after data to be parents
-      ordered_dmat = apply(dmat, 2, order)
-      NNarrays_same_var[[i]]= lapply(seq(maxval_per_variable[i]), function(j)
-      {
-        if(var_tag[j]==i) m = m_same_var
-        if(var_tag[j]!=i) m = m_other_vars
-        return(which(ordered_dmat[,j]<= min(j, m)))
-      }
-        )
+    NNlists_quotas[[i]] = list()
+    #  Tree search
+    query_inds = 1:n # start with queries ranging from maxval to n
+    data_inds = which(var_tag==i) # start with data being all indices of the variable
+    msearch <- max(m_other_vars, m_same_var) # search depht
+    while( length(query_inds) > 0 ){
+      data_inds <-  which(var_tag[1:max(query_inds)]==i)# restrict data to all indices of the variable coming before last query
+      msearch <- min(length(data_inds), 2*msearch)# increase search depht
+      NN <- FNN::get.knnx( locs[data_inds,,drop=FALSE], locs[query_inds,,drop=FALSE], msearch )$nn.index # get NNs
+      NN <- apply(NN, 2, function(x)data_inds[x])
+      # forbidding points of variable i to take themselves as parents
+      NN[which(var_tag[query_inds]==i),1] = n+1
+      less_than_k <- t(sapply( 1:nrow(NN), function(k) NN[k,] <= query_inds[k]  ))# get only NNs coming before
+      sum_less_than_k <- apply(less_than_k,1,sum)
+      m = obtained_parents_by_var[query_inds,i]
+      ind_less_than_k <- which(sum_less_than_k >= m )
+      NN_m <- t(lapply(ind_less_than_k,function(k) NN[k,][less_than_k[k,]][1:(m[k])]))
+      NNlists_quotas[[i]][ query_inds[ind_less_than_k] ] <- NN_m
+      query_inds <- query_inds[-ind_less_than_k]
     }
   }
-  
-  
-  
-  
-  # Whatever Closest NNarray
-  # getting first row of whatever closest NNarray
-  dmat = fields::rdist(locs[seq(maxval_whatever_closest),,drop = F],)
-  dmat[
-    row(dmat)>= col(dmat)
-  ] = Inf # forbidding locations coming after data to be parents
-  for(i in seq(length(NNarrays_same_var))){
-    for(j in seq(maxval_whatever_closest))
-    {
-      dmat[cbind(NNarrays_same_var[[i]][[j]], j)] = Inf
+  #merging NNlists quotas
+  NNlists_quotas = do.call(function(x, y)mapply(c, x, y), NNlists_quotas)
+  NNlist_closest = lapply(seq(n), function(i)NULL)
+  if(m_whatever_closest!=0){
+    # Whatever closest NNlist
+    NNlist_closest = list()
+    query_inds = 1:n # start with queries ranging from 1 to n
+    data_inds = 1:n # start with data being all indices of the variable
+    msearch <- max(m_whatever_closest) # search depht
+     while( length(query_inds) > 0 ){
+      data_inds <-  1:max(query_inds)# restrict data to all indices of the variable coming before last query
+      msearch <- min(length(data_inds), 2*msearch)# increase search depht
+      NN <- FNN::get.knnx( locs[data_inds,,drop=FALSE], locs[query_inds,,drop=FALSE], msearch )$nn.index # get NNs
+      # forbidding parents already chosen for quotas
+      already_taken_indices = mapply(function(x, y) which(x%in%y), split(NN, row(NN)), NNlists_quotas[query_inds], SIMPLIFY = F)
+      NN[cbind(unlist(lapply(seq(length(already_taken_indices)), function(i)rep(i, length(already_taken_indices[[i]])))), unlist(already_taken_indices))] = n+1
+      NN[,1] = n+1
+      less_than_k <- t(sapply( 1:nrow(NN), function(k) NN[k,] <= query_inds[k]  ))# get only NNs coming before
+      sum_less_than_k <- apply(less_than_k,1,sum)
+      m = obtained_parents_whatever_closest[query_inds]
+      ind_less_than_k <- which(sum_less_than_k >= m )
+      NN_m <- t(lapply(ind_less_than_k,function(k) NN[k,][less_than_k[k,]][1:(m[k])]))
+      NNlist_closest[ query_inds[ind_less_than_k] ] <- NN_m
+      query_inds <- query_inds[-ind_less_than_k]
     }
   }
-  # forbidding locations already allocated 
-  ordered_dmat = apply(dmat, 2, order)
+  NNlist = mapply(c, NNlist_closest, NNlists_quotas)
+  NNlist = lapply(NNlist, function(x)c(na.omit(x)))
 
-  
-  
-  
-  
-  
-  
-  query_inds <- min( maxval+1, n):n
-  data_inds <- 1:n
-  
-  msearch <- m
-  
-  while( length(query_inds) > 0 ){
-    msearch <- min( max(query_inds), 2*msearch )
-    data_inds <- 1:min( max(query_inds), n )
-    NN <- FNN::get.knnx( locs[data_inds,,drop=FALSE], locs[query_inds,,drop=FALSE], msearch )$nn.index
-    less_than_k <- t(sapply( 1:nrow(NN), function(k) NN[k,] <= query_inds[k]  ))
-    sum_less_than_k <- apply(less_than_k,1,sum)
-    ind_less_than_k <- which(sum_less_than_k >= m+1)
-    
-    NN_m <- t(sapply(ind_less_than_k,function(k) NN[k,][less_than_k[k,]][1:(m+1)] ))
-    
-    NNarray[ query_inds[ind_less_than_k], ] <- NN_m
-    
-    query_inds <- query_inds[-ind_less_than_k]
-    
-  }
-  
+  NNarray = matrix(NA, length(NNlist), max(sapply(NNlist, length))+1)
+  NNarray[cbind(
+    rep(seq(length(NNlist)), sapply(NNlist, length)), 
+    unlist(lapply(NNlist, function(x)seq(length(x))))[-c(1, 2)]+1
+    )] = unlist(NNlist)
+  NNarray[,1] = seq(n)
   return(NNarray)
 }
-
