@@ -1,47 +1,53 @@
-remove(list = ls(
-  
-))
+
 
 # test data
-locs = matrix(runif(500), ncol = 2)
-var_tag = 1 + floor(2 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
+locs = matrix(runif(50000), ncol = 2)
+var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
 m_whatever_closest = 10
-m_same_var = 3
-m_other_vars = 2
+m_same_var = 5
+m_other_vars = 0
 
-# test for neighbors from one variable (run inside of function)
-i = 13
+
+tatato = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 0, var_tag = var_tag)
+
+i = 1000
 plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
-points(locs[i,, drop = F], cex=1, col = var_tag[i])
-points(locs[NNlists_quotas[[i]],], cex=1, col = var_tag[NNlists_quotas[[i]]])
-points(locs[NNlist_closest[[i]],], cex=1, col = 3)
+points(locs[i,, drop=F], cex=.5, col = var_tag[i], pch=2)
+points(locs[tatato[i,],], col = 4)
 
-
-# test for stratified neighbors
-NNarray = find_ordered_nn_multi(locs, m_whatever_closest = 10, m_same_var = 5, m_other_vars = 2, var_tag = var_tag, locs = locs)
-i = 4
-plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
-points(locs[i,, drop = F], cex=1, col = var_tag[i])
-points(locs[NNlist[[i]],], cex=1, col = 3)
-
-
-# wierd test data
-locs = matrix(runif(500), ncol = 2)
-var_tag = 1 + (locs[,1]<.5);var_tag = 1 + (var_tag!=var_tag[1])
-m_whatever_closest = 10
-m_same_var = 3
-m_other_vars = 2
-
-# test for stratified neighbors
-NNlist = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag, locs = locs)
-i = 200
-plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
-points(locs[i,, drop = F], cex=1, col = var_tag[i])
-points(locs[NNlist[[i]],], cex=1, col = 3)
-
+#### # test for neighbors from one variable (run inside of function)
+#### i = 13
+#### plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+#### points(locs[i,, drop = F], cex=1, col = var_tag[i])
+#### points(locs[NNlists_quotas[[i]],], cex=1, col = var_tag[NNlists_quotas[[i]]])
+#### points(locs[NNlist_closest[[i]],], cex=1, col = 3)
+#### 
+#### 
+#### # test for stratified neighbors
+#### NNarray = find_ordered_nn_multi(locs, m_whatever_closest = 10, m_same_var = 5, m_other_vars = 2, var_tag = var_tag, locs = locs)
+#### i = 4
+#### plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+#### points(locs[i,, drop = F], cex=1, col = var_tag[i])
+#### points(locs[NNlist[[i]],], cex=1, col = 3)
+#### 
+#### 
+#### # wierd test data
+#### locs = matrix(runif(500), ncol = 2)
+#### var_tag = 1 + (locs[,1]<.5);var_tag = 1 + (var_tag!=var_tag[1])
+#### m_whatever_closest = 10
+#### m_same_var = 3
+#### m_other_vars = 2
+#### 
+#### # test for stratified neighbors
+#### NNlist = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag, locs = locs)
+#### i = 200
+#### plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+#### points(locs[i,, drop = F], cex=1, col = var_tag[i])
+#### points(locs[NNlist[[i]],], cex=1, col = 3)
+#### 
 # var_tag must be integer and unique(var_tag) must be increasing
 find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE, space_time = FALSE, st_scale = NULL){
-  if(m_whatever_closest==0 & m_same_var==0)return(GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat, st_scale = st_scale))
+  if(m_other_vars==0 & m_same_var==0)return(GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat, st_scale = st_scale))
   # number of locations
   n <- nrow(locs)
   nvar = length(unique(var_tag))
@@ -93,14 +99,18 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
       less_than_k <- t(sapply( 1:nrow(NN), function(k) NN[k,] <= query_inds[k]  ))# get only NNs coming before
       sum_less_than_k <- apply(less_than_k,1,sum)
       m = obtained_parents_by_var[query_inds,i]
-      ind_less_than_k <- which(sum_less_than_k >= m )
-      NN_m <- t(lapply(ind_less_than_k,function(k) NN[k,][less_than_k[k,]][1:(m[k])]))
-      NNlists_quotas[[i]][ query_inds[ind_less_than_k] ] <- NN_m
+      ind_less_than_k <- which(sum_less_than_k >= m)
+      NN_m <- t(lapply(ind_less_than_k,function(k) NN[k,][less_than_k[k,]][seq(0, m[k])]))
+      NNlists_quotas[[i]][ query_inds[ind_less_than_k] ] = NN_m
       query_inds <- query_inds[-ind_less_than_k]
     }
   }
   #merging NNlists quotas
-  NNlists_quotas = do.call(function(x, y)mapply(c, x, y), NNlists_quotas)
+  for(i in seq(length(NNlists_quotas[[1]])))
+  {
+    NNlists_quotas[[1]][[i]]= unlist(lapply(NNlists_quotas, function(x)x[[i]]))
+  }
+  NNlists_quotas = NNlists_quotas[[1]]
   NNlist_closest = lapply(seq(n), function(i)NULL)
   if(m_whatever_closest!=0){
     # Whatever closest NNlist
@@ -129,10 +139,18 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
   NNlist = lapply(NNlist, function(x)c(na.omit(x)))
 
   NNarray = matrix(NA, length(NNlist), max(sapply(NNlist, length))+1)
-  NNarray[cbind(
-    rep(seq(length(NNlist)), sapply(NNlist, length)), 
-    unlist(lapply(NNlist, function(x)seq(length(x))))[-c(1, 2)]+1
-    )] = unlist(NNlist)
+  ##NNarray[cbind(
+  ##  rep(seq(length(NNlist)), sapply(NNlist, length)), 
+  ##  unlist(lapply(NNlist, function(x)seq(length(x))))[-c(1, 2)]+1
+  ##  )] = unlist(NNlist)
+  NNarray[,-1][
+    cbind(
+      rep(seq(length(NNlist)), sapply(NNlist, length)),
+      unlist(lapply(NNlist, function(x)
+      {
+        if(length(x)==0)return(c())
+        if(length(x)!=0)return(seq(length(x)))
+      })))] = unlist(NNlist)
   NNarray[,1] = seq(n)
   return(NNarray)
 }

@@ -1,13 +1,19 @@
 
 
-X = cbind(rep(1, 1000), seq(1000)*.01 )
-beta = matrix(rnorm(6), 2)
-x = X %*% beta
+
+# This script allows to run a bayesian multivariate linear model with heteroskedastic noise
+# there is progress to be done concerning the efficiency of the differentiation of the noise
+
+X = cbind(rep(1, 1000), seq(1000)*.01 ) # covariates
+beta = matrix(rnorm(6), 2) # multivariate regression coeff
+x = X %*% beta # partially observed response
 x[seq(100), 1] = NA
 x[seq(101, 200), 2] = NA
 x[seq(201, 300), 3] = NA
 x[seq(301, 400), c(1, 2)] = NA
+# number of observations
 n_obs = ncol(x)-apply(x, 1, function(x)sum(is.na(x)))
+# collection of noise covariances at each spatial site
 tau = lapply(n_obs, function(x)
 {
   tatato = rnorm(x*(x+1)/2, +1)
@@ -18,11 +24,13 @@ tau = lapply(n_obs, function(x)
   expm::expm(M)
 }
 )
+# adding noise to response
 x = t(x)
 x[!is.na(x)] = x[!is.na(x)] +
 unlist(lapply(tau, function(tau)t(chol(solve(tau)))%*%rnorm(nrow(tau))))
 x = t(x)
 
+# prior precision and mean for beta
 beta_prior_precision = diag(.000001, 6,6)
 beta_prior_mean = c(0, 0, 0, 0, 0, 0)
 
@@ -75,30 +83,60 @@ get_beta = function(
 nrow_sqare_matrix = function(mat_coord_length)(-1+ sqrt(1 + 8*mat_coord_length))/2
 nrow_sqare_matrix(3)
 
-# get exponential of symmetric matrix
-get_symmetric_expmat = function(mat_coordinates)
+#  symmetric matrix
+get_symmetric_mat = function(mat_coordinates)
 {
   M = matrix(0,nrow_sqare_matrix(length(mat_coordinates)),nrow_sqare_matrix(length(mat_coordinates)))
   M[lower.tri(M, diag = T)] = mat_coordinates
   M = t(M)
   M[lower.tri(M, diag = T)] = mat_coordinates
-  expm::expm(M)
+  M
 }
+# get exponential of symmetric matrix
+get_symmetric_expmat = function(mat_coordinates)
+{
+  expm::expm(get_symmetric_mat(mat_coordinates))
+}
+
+get_symmetrix_mat_coordinates = function(M)M[lower.tri(M, T)]
   
+## get derivatives of exponential of symmetric matrix
+#get_symmetric_expmat_derivatives = function(mat_coordinates)
+#{
+#  M_0 = get_symmetric_expmat(mat_coordinates)
+#  det_M_0 = determinant(M_0)$mod
+#  lapply(seq(length(mat_coordinates)), function(i)
+#  {
+#    mat_coordinates_ = mat_coordinates; mat_coordinates_[i] = mat_coordinates_[i] + 0.000001
+#    M = get_symmetric_expmat(mat_coordinates_)
+#    list("mat_derivative" = 1000000 * (M- M_0), "log_det_derivative" = 1000000 *(determinant(M)$mod - det_M_0))
+#  }
+#    )
+#}
+
+
 # get derivatives of exponential of symmetric matrix
 get_symmetric_expmat_derivatives = function(mat_coordinates)
 {
-  M_0 = get_symmetric_expmat(mat_coordinates)
-  det_M_0 = determinant(M_0)$mod
+  M_0 = get_symmetric_mat(mat_coordinates)
+  eig = eigen(M_0)
+  M_0_trace = sum(diag(M_0))
+  # using directional derivative formula
+  G = outer(eig$val, eig$val, function(x, y)(exp(x)-exp(y))/(x-y))
+  diag(G)=exp(eig$val)
+  G[is.nan(G)]=0
   lapply(seq(length(mat_coordinates)), function(i)
   {
-    mat_coordinates_ = mat_coordinates; mat_coordinates_[i] = mat_coordinates_[i] + 0.000001
-    M = get_symmetric_expmat(mat_coordinates_)
-    list("mat_derivative" = 1000000 * (M- M_0), "log_det_derivative" = 1000000 *(determinant(M)$mod - det_M_0))
-  }
+    coord = rep(0, length(mat_coordinates)); coord[i]=1; V = get_symmetric_mat(coord) 
+    return(
+    list("mat_derivative" = eig$vectors %*% ((t(eig$vec) %*% V %*% eig$vectors)*G)%*% t(eig$vectors), 
+         "log_det_derivative" = (exp(M_0_trace + sum(diag(.0001*V))) - exp(M_0_trace)))
     )
+  })
 }
 
+
+get_symmetric_expmat(c(0,0,0))
 get_symmetric_expmat(c(0,0,0))
 get_symmetric_expmat(c(.0001,0,0))
 get_symmetric_expmat_derivatives(c(0,0,0))
@@ -108,6 +146,59 @@ get_symmetric_expmat_derivatives(c(0,0,0))[[1]][[1]]-(get_symmetric_expmat(c(0.0
 get_symmetric_expmat_derivatives(c(0,0,0))[[1]][[2]]-(determinant(get_symmetric_expmat(c(0.00001,0,0)))$mod-determinant(get_symmetric_expmat(c(0,0,0)))$mod)*100000
 get_symmetric_expmat_derivatives(c(0,0,0))[[2]][[1]]-(get_symmetric_expmat(c(0,0.00001,0))-get_symmetric_expmat(c(0,0,0)))*100000
 get_symmetric_expmat_derivatives(c(0,0,0))[[2]][[2]]-(determinant(get_symmetric_expmat(c(0,0.00001,0)))$mod-determinant(get_symmetric_expmat(c(0,0,0)))$mod)*100000
+
+get_symmetric_expmat_derivatives_(c(0,0,0))[[1]][[1]]-(get_symmetric_expmat(c(0.000001,0,0))-get_symmetric_expmat(c(0,0,0)))*1000000
+
+
+
+# given covariates X_tau and regression coefficients beta_tau, 
+# gets the list of noise covariance matrices
+# the value of the noise epsilon is used only in order to 
+# get the NA pattern
+get_tau = function(epsilon, beta_tau, X_tau)
+{
+  NA_pattern =   matrix(t(apply(epsilon, 1, function(epsilon_row)
+  {
+    res = matrix(1, ncol(epsilon), ncol(epsilon))
+    res [is.na(epsilon_row), ] = NA
+    res [, is.na(epsilon_row)] = NA
+    res[lower.tri(res, diag = T)]
+  }
+  )), ncol = ncol(epsilon)*(ncol(epsilon)+1)/2)
+  tau_log_coords = X_tau %*% beta_tau
+  mapply(
+    function(tau_log_coord, NA_pattern) 
+    {
+      get_symmetric_expmat(tau_log_coord[!is.na(NA_pattern)])
+    },
+    split(tau_log_coords, row(tau_log_coords)),
+    split(NA_pattern, row(NA_pattern)), 
+    SIMPLIFY = F
+  )
+}
+
+# gets the potential of noise epsilon given covariances tau
+get_tau_potential = function(tau, epsilon)
+{
+  sum(mapply(
+    function(epsilon_row, precision_matrix)
+    {
+      -.5 * determinant(precision_matrix)$mod + .5 * sum(epsilon_row[!is.na(epsilon_row)] * (precision_matrix%*%epsilon_row[!is.na(epsilon_row)]))
+    }, 
+    split(epsilon, row(epsilon)), 
+    tau
+  ))
+}
+
+epsilon = matrix(c(1, 1), 1)
+beta_tau =matrix(c(1, 1, 0), 1)
+X_tau = cbind(1)
+
+.5 * epsilon %*%get_tau(epsilon = epsilon, beta_tau = beta_tau, X_tau = X_tau)[[1]] %*% t(epsilon)- .5* determinant(get_tau(epsilon = epsilon, beta_tau = beta_tau, X_tau = X_tau)[[1]])$mod
+get_tau_potential(get_tau(epsilon = epsilon, beta_tau = beta_tau, X_tau = X_tau), epsilon)
+
+
+
 
 X_tau = cbind(1, seq(1000)/1000)
 beta_tau = matrix(rnorm(6), nrow = 2)
@@ -170,46 +261,7 @@ get_tau_potential(tau = get_tau(epsilon = epsilon, beta_tau = beta_tau, X_tau = 
 )
 get_beta_tau_gradient(epsilon, beta_tau, X_tau)
 
-get_tau = function(epsilon, beta_tau, X_tau)
-{
-  NA_pattern =   matrix(t(apply(epsilon, 1, function(epsilon_row)
-  {
-    res = matrix(1, ncol(epsilon), ncol(epsilon))
-    res [is.na(epsilon_row), ] = NA
-    res [, is.na(epsilon_row)] = NA
-    res[lower.tri(res, diag = T)]
-  }
-  )), ncol = ncol(epsilon)*(ncol(epsilon)+1)/2)
-  tau_log_coords = X_tau %*% beta_tau
-  mapply(
-      function(tau_log_coord, NA_pattern) 
-      {
-        get_symmetric_expmat(tau_log_coord[!is.na(NA_pattern)])
-      },
-      split(tau_log_coords, row(tau_log_coords)),
-      split(NA_pattern, row(NA_pattern)), 
-      SIMPLIFY = F
-    )
-}
 
-epsilon = matrix(c(1, 1), 1)
-beta_tau =matrix(c(1, 1, 0), 1)
-X_tau = cbind(1)
-
-.5 * epsilon %*%get_tau(epsilon = epsilon, beta_tau = beta_tau, X_tau = X_tau)[[1]] %*% t(epsilon)- .5* determinant(get_tau(epsilon = epsilon, beta_tau = beta_tau, X_tau = X_tau)[[1]])$mod
-get_tau_potential(get_tau(epsilon = epsilon, beta_tau = beta_tau, X_tau = X_tau), epsilon)
-
-get_tau_potential = function(tau, epsilon)
-{
-  sum(mapply(
-    function(epsilon_row, precision_matrix)
-    {
-      -.5 * determinant(precision_matrix)$mod + .5 * sum(epsilon_row[!is.na(epsilon_row)] * (precision_matrix%*%epsilon_row[!is.na(epsilon_row)]))
-    }, 
-    split(epsilon, row(epsilon)), 
-    tau
-  ))
-}
 
 
 
@@ -217,12 +269,16 @@ get_tau_potential = function(tau, epsilon)
 
 locs = seq(1000)
 X = cbind(1, seq(1000)/1000)
+X = as.matrix(scale(X))
+X[,1]=1/sqrt(nrow(X))
 beta = 3 * matrix(rnorm(4), 2)
 X_beta = X%*% beta
 
 X_tau = cbind(1, seq(1000)/1000)
+X_tau = as.matrix(scale(X_tau))
+X_tau[,1]=1/sqrt(nrow(X_tau))
 X_tau[,2]= (X_tau[,2]-mean(X_tau[,2]))/sd(X_tau[,2])
-beta_tau = matrix(rnorm(6), nrow = 2)+3
+beta_tau = matrix(rnorm(6), nrow = 2)
 tau_log_coords = X_tau %*% beta_tau
 
 epsilon = matrix(t(
@@ -231,7 +287,8 @@ epsilon = matrix(t(
   ), ncol = ncol(beta))
 observed_x = X_beta + epsilon
 
-
+plot(observed_x[,1], X_beta[,1])
+plot(observed_x[,2], X_beta[,2])
 
 
 state = list()
