@@ -138,6 +138,7 @@ R_and_variation = compute_R_and_variation(eta_and_variation, a2, b2, alpha, beta
 
 Matern = function(h, r, nu_)(2^(1-nu_)) * (r * h)^nu_ * besselK(r * h, nu_)
 
+
 compute_sig = function(eta, a2, b2, alpha, beta, nu)
 {
   # expanding range parameters a2 and b2 
