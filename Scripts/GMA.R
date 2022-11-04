@@ -323,12 +323,27 @@ try(chol(expand_covmat(covmat_compressed)))
 }
 
 
+get_nu_and_variations = function(nu_vec)
+{
+  res = list()
+  nu_ = outer(nu_vec, nu_vec, "+"); nu_= nu_/2; nu_ = nu_[lower.tri(nu_, diag = T)]
+  res$nu_ = nu_
+  res$nu_variations = matrix(0, length(nu_), length(nu_vec))
+  for(j in seq(dim(multiplier_and_variations$d_A_vec)[3]))
+  {
+    perturb = rep(0, length(nu_vec)); perturb[j]= perturb[j]+.0001
+    nu__ = outer(nu_vec + perturb, nu_vec + perturb, "+"); nu__ = nu__/2; nu__ = nu__[lower.tri(nu__, diag = T)]
+    res$nu_variations[,j]= nu__
+  }
+  res
+}
+
+nu_and_variations = get_nu_and_variations(nu_vec)
+
 multiplier_and_variations = get_multiplier_and_variations(
   a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
   r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, rho_vec = rho_vec, u = u
 )
-
-
 
 effective_range_and_variations = get_effective_range_and_variations(
   a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
@@ -372,21 +387,19 @@ for(j in seq(dim(multiplier_and_variations$d_A_vec)[3]))
     non_null_idx = which(multiplier_and_variations$d_A_vec[i, var_idx, j]!=multiplier_and_variations$multiplier[i, var_idx])
     res$d_A_vec[,,j][idx_][non_null_idx] = 
       (
-        Matern(h[non_null_idx], r = effective_range_and_variations$d_A_vec[i, var_idx, j][non_null_idx], nu_ = nu_[var_idx][non_null_idx]) * 
+        Matern(h[non_null_idx], r = effective_range_and_variations$d_A_vec[i, var_idx, j][non_null_idx], nu_ = nu_and_variations$nu_[var_idx][non_null_idx]) * 
           multiplier_and_variations$d_A_vec[i, var_idx, j][non_null_idx] - 
           res$covmat_compressed[idx_][non_null_idx]
       ) * 10000
     res$d_a2_vec[,,j][idx_][non_null_idx] = 
       (
-        Matern(h[non_null_idx], r = effective_range_and_variations$d_a2_vec[i, var_idx, j][non_null_idx], nu_ = nu_[var_idx][non_null_idx]) * 
+        Matern(h[non_null_idx], r = effective_range_and_variations$d_a2_vec[i, var_idx, j][non_null_idx], nu_ = nu_and_variations$nu_[var_idx][non_null_idx]) * 
           multiplier_and_variations$d_a2_vec[i, var_idx, j][non_null_idx] - 
           res$covmat_compressed[idx_][non_null_idx]
       ) * 10000
-    perturb = rep(0, length(nu_vec)); perturb[j]= perturb[j]+.0001
-    nu__ = outer(nu_vec + preturb, nu_vec + preturb, "+"); nu__ = nu__/2; nu__ = nu__[lower.tri(nu_, diag = T)]
     res$d_nu_vec[,,j][idx_][non_null_idx] = 
       (
-        Matern(h[non_null_idx], r = effective_range_and_variations$effective_range[i, var_idx][non_null_idx], nu_ = nu__[var_idx][non_null_idx]) * 
+        Matern(h[non_null_idx], r = effective_range_and_variations$effective_range[i, var_idx][non_null_idx], nu_ = nu_and_variations$nu_variations[var_idx, j][non_null_idx]) * 
           multiplier_and_variations$d_nu_vec[i, var_idx, j][non_null_idx] - 
           res$covmat_compressed[idx_][non_null_idx]
       ) * 10000
@@ -417,7 +430,7 @@ res$d_nu_vec[,,1],
 GMA_compressed(
   locs, var_tag,
   multiplier_, 
-  effective_range_,
+  effective_range,
   nu_vec_, 
   p
 )-
