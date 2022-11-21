@@ -1,19 +1,19 @@
 
 
 # test data
-locs = matrix(runif(50000), ncol = 2)
-var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
-m_whatever_closest = 10
-m_same_var = 5
-m_other_vars = 0
-
-
-tatato = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 0, var_tag = var_tag)
-
-i = 1000
-plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
-points(locs[i,, drop=F], cex=.5, col = var_tag[i], pch=2)
-points(locs[tatato[i,],], col = 4)
+## locs = matrix(runif(50000), ncol = 2)
+## var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
+## m_whatever_closest = 10
+## m_same_var = 5
+## m_other_vars = 0
+## 
+## 
+## tatato = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 0, var_tag = var_tag)
+## 
+## i = 1000
+## plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+## points(locs[i,, drop=F], cex=.5, col = var_tag[i], pch=2)
+## points(locs[tatato[i,],], col = 4)
 
 #### # test for neighbors from one variable (run inside of function)
 #### i = 13
@@ -46,8 +46,8 @@ points(locs[tatato[i,],], col = 4)
 #### points(locs[NNlist[[i]],], cex=1, col = 3)
 #### 
 # var_tag must be integer and unique(var_tag) must be increasing
-find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE, space_time = FALSE, st_scale = NULL){
-  if(m_other_vars==0 & m_same_var==0)return(GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat, st_scale = st_scale))
+find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE){
+  if(m_other_vars==0 & m_same_var==0)return(GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat))
   # number of locations
   n <- nrow(locs)
   nvar = length(unique(var_tag))
