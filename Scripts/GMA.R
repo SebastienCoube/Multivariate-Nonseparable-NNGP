@@ -270,7 +270,7 @@ expand_covmat_into_blocks = function(covmat_coeffs, n_loc, block_lower_tri_idx)
   blocks  
 }
 
-expand_block_toeplitz_covmat = function(covmat_coeffs, n_loc, block_lower_tri_idx)
+expand_block_toeplitz_covmat = function(covmat_coeffs, block_lower_tri_idx, n_loc)
 {
   blocks = expand_covmat_into_blocks(covmat_coeffs, n_loc, block_lower_tri_idx)
   block_idx_matrix = toeplitz(c(seq(ncol(covmat_coeffs))))
