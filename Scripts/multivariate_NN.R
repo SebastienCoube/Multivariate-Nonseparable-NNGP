@@ -1,19 +1,20 @@
 
 
 # test data
-## locs = matrix(runif(50000), ncol = 2)
-## var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
-## m_whatever_closest = 10
-## m_same_var = 5
-## m_other_vars = 0
-## 
-## 
-## tatato = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 0, var_tag = var_tag)
-## 
-## i = 1000
-## plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
-## points(locs[i,, drop=F], cex=.5, col = var_tag[i], pch=2)
-## points(locs[tatato[i,],], col = 4)
+
+### locs = matrix(runif(500), ncol = 2)
+### var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
+### m_whatever_closest = 10
+### m_same_var = 5
+### m_other_vars = 3
+### 
+### 
+### tatato = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag)
+### 
+### i = 500
+### plot(locs[seq(i-1),], pch = 16, cex=.5, col = var_tag)
+### points(locs[i,, drop=F], cex=.5, col = var_tag[i], pch=2)
+### points(locs[tatato[i,],], col = 4)
 
 #### # test for neighbors from one variable (run inside of function)
 #### i = 13
@@ -51,16 +52,11 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
   # number of locations
   n <- nrow(locs)
   nvar = length(unique(var_tag))
-  mult <- 2
   
   # FNN::get.knnx has strange behavior for exact matches
   # so add a small amount of noise to each location
   ee <- min(apply( locs, 2, stats::sd ))
   locs <- locs + matrix( ee*1e-4*stats::rnorm(n*ncol(locs)), n, ncol(locs) ) 
-  
-  
-  # splitting location according to variable tag
-  locs_split_by_var = lapply(unique(var_tag), function(tag)locs[var_tag == tag, ,drop = FALSE])
   
   # number of available parents of each variable
   number_available_parents_by_var = apply(sapply(unique(var_tag), function(tag)var_tag == tag), 2, function(x) (cumsum(x)-1))
@@ -138,19 +134,104 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
   NNlist = mapply(c, NNlist_closest, NNlists_quotas)
   NNlist = lapply(NNlist, function(x)c(na.omit(x)))
 
-  NNarray = matrix(NA, length(NNlist), max(sapply(NNlist, length))+1)
-  ##NNarray[cbind(
-  ##  rep(seq(length(NNlist)), sapply(NNlist, length)), 
-  ##  unlist(lapply(NNlist, function(x)seq(length(x))))[-c(1, 2)]+1
-  ##  )] = unlist(NNlist)
-  NNarray[,-1][
-    cbind(
-      rep(seq(length(NNlist)), sapply(NNlist, length)),
-      unlist(lapply(NNlist, function(x)
-      {
-        if(length(x)==0)return(c())
-        if(length(x)!=0)return(seq(length(x)))
-      })))] = unlist(NNlist)
-  NNarray[,1] = seq(n)
-  return(NNarray)
+#  NNarray = matrix(NA, length(NNlist), max(sapply(NNlist, length))+1)
+#  ##NNarray[cbind(
+#  ##  rep(seq(length(NNlist)), sapply(NNlist, length)), 
+#  ##  unlist(lapply(NNlist, function(x)seq(length(x))))[-c(1, 2)]+1
+#  ##  )] = unlist(NNlist)
+#  NNarray[,-1][
+#    cbind(
+#      rep(seq(length(NNlist)), sapply(NNlist, length)),
+#      unlist(lapply(NNlist, function(x)
+#      {
+#        if(length(x)==0)return(c())
+#        if(length(x)!=0)return(seq(length(x)))
+#      })))] = unlist(NNlist)
+#  NNarray[,1] = seq(n)
+#  return(NNarray)
+  return(NNlist)
 }
+
+
+
+
+
+# var_tag must be integer and unique(var_tag) must be increasing
+find_unordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE){
+  # number of locations
+  n <- nrow(locs)
+  nvar = length(unique(var_tag))
+  
+  # FNN::get.knnx has strange behavior for exact matches
+  # so add a small amount of noise to each location
+  ee <- min(apply( locs, 2, stats::sd ))
+  locs <- locs + matrix( ee*1e-4*stats::rnorm(n*ncol(locs)), n, ncol(locs) ) 
+  
+  # Start with quotas NNlists
+  NNlists_quotas = list()
+  for(i in seq(nvar))
+  {
+    data_inds <-  which(var_tag==i)# restrict data to all indices of the variable coming before last query
+    # getting k nearest neighbors
+    NNlists_quotas[[i]] = FNN::get.knnx(data = locs[data_inds,], query = locs, k = max(m_other_vars, m_same_var)+1)$nn.index
+    # traducig k nn into indices of pooled variables instead of indices of
+    NNlists_quotas[[i]][]= data_inds[NNlists_quotas[[i]]]
+    # traducing neighbor index from 
+    # splitting by row and removing superfluous neighbors
+    NNlists_quotas[[i]] = split(NNlists_quotas[[i]], row(NNlists_quotas[[i]]))
+    NNlists_quotas[[i]] = mapply(
+      function(NN_vec, tag)
+      {
+        if(tag==i)if(m_same_var  ==0){return(NULL)}else {return(NN_vec[2:(m_same_var+1)])}# start by 2 to forbid taking oneself as neighbor
+        if(tag!=i)if(m_other_vars==0){return(NULL)}else {return(NN_vec[1:(m_other_vars)])}
+      },
+      NNlists_quotas[[i]], 
+      var_tag
+      )
+  }
+  ##loc_idx= 10
+  ##var_idx= 1
+  ##plot(locs)
+  ##points(locs[loc_idx,,drop=F], col=2, pch = 2)  
+  ##points(locs[NNlists_quotas[[var_idx]][[loc_idx]],], col=3, pch = 2)  
+  ##points(locs[which(var_tag==var_idx),], col=4, pch=3) 
+  
+  #merging NNlists quotas
+  NNlists_quotas = lapply(lapply(seq(length(NNlists_quotas[[1]])), function(i)lapply(NNlists_quotas, function(x)x[[i]])), unlist)
+  
+  # NNlist of whatever nearest neighbor
+  # get NNs
+  NNlist_closest = FNN::get.knn(data = locs, k = m_whatever_closest + m_same_var + (nvar-1)*m_other_vars)$nn.index
+  # split
+  NNlist_closest = split(NNlist_closest, row(NNlist_closest))
+  # remove already chosen nn because of quotas
+  NNlist_closest = mapply(setdiff, NNlist_closest, NNlists_quotas)
+  # take m_whatever_closest first neighbors
+  NNlist_closest = lapply(NNlist_closest, function(x)x[1:m_whatever_closest])
+  
+  # merging quotas and closest
+  NNlist = mapply(c, NNlist_closest, NNlists_quotas, SIMPLIFY = F)
+  
+  # adding same index because i conditions on i at previous times
+  NNlist = mapply(c, lapply(seq(n), function(x)x), NNlist, SIMPLIFY = F)
+  
+  return(NNlist)
+}
+
+
+
+
+# test data
+
+## locs = matrix(runif(500), ncol = 2)
+## var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
+## m_whatever_closest = 10
+## m_same_var = 5
+## m_other_vars = 3
+## 
+## 
+## nnlist_ordered = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag)
+## nnlist_unordered = find_unordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag)
+
+
+
