@@ -4,9 +4,14 @@ source("Scripts/grouping.R")
 source("Scripts/multivariate_NN.R")
 
 
+# flip image function to match matrix
+my_image = function(m)image(t(m)[,nrow(m):1])
+
+
+# simulate data
 set.seed(1)
 
-n_loc = 15
+n_loc = 1000
 n_var = 3
 n_time = 3
 
@@ -31,17 +36,80 @@ A_vec = runif(n_var)
 u = seq(0, n_time-1)
 
 # creating the DAG
-DAG = find_ordered_nn_multi(locs = locs, 
+NNarray_same_time = find_ordered_nn_multi(locs = locs, 
                             var_tag = var_tag, 
                             m_whatever_closest = 5, m_same_var = 0, m_other_vars = 0, 
                             lonlat = F)
-DAG = guinness_groups(DAG)
-summary(sapply(DAG$children, length))
-hist(sapply(DAG$children, length), breaks = seq(1, max(sapply(DAG$children, length))))
-summary(sapply(DAG$parents, length))
+NNarray_pevious_times = find_unordered_nn_multi(locs = locs, 
+                            var_tag = var_tag, 
+                            m_whatever_closest = 10, m_same_var = 0, m_other_vars = 0, 
+                            lonlat = F)
+DAG = list(
+  "children" = lapply(seq(n_loc), function(x)x), 
+  "parents_same_time" = NNarray_same_time, 
+  "parents_previous_times" = NNarray_pevious_times 
+           )
+
+# getting parts of lower-triangular covmat affected by rho
+get_rho_idx_from_dag = function(DAG, var_tag)
+{
+  n_var = max(var_tag)
+  idx_1 = mapply(c, DAG$children, DAG$parents_same_time)
+  var_idx_current_time = lapply(idx_1, function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = T))
+  var_idx_previous_times = lapply(DAG$parents_previous_times, function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = F))
+  var_idx_cross = mapply(
+    function(x, y)outer(x, y, position_in_lower_tri, n_loc = n_var), 
+    var_idx_current_time,
+    var_idx_previous_times
+  )
+  
+  rho_indices = position_in_lower_tri_cross_vec(seq(n_var), n_var = n_var, diag = F)
+  
+  res = lapply(rho_indices, function(i)
+    list(
+      current_time   = lapply(var_idx_current_time,   function(x)lower_tri_idx(length(x), T)[which(x==i),]),
+      previous_times = lapply(var_idx_previous_times, function(x)lower_tri_idx(length(x), T)[which(x==i),]), 
+      cross = lapply(var_idx_cross, function(x)cbind(row(x)[x==i], col(x)[x==i]))
+    )
+    )
+  names(res)= outer(seq(n_var), seq(n_var), paste, sep = "_")[lower.tri(matrix(0, n_var, n_var))]
+  res
+}
+
+rho_idx = get_rho_idx_from_dag(DAG = DAG, var_tag = var_tag )
+
+# get lower triangular indices in the dag
+
+get_lower_tri_idx_DAG = function(DAG)
+{
+  lower_tri_idx_DAG = list()
+  lower_tri_idx_DAG$same_time = lapply(mapply(c,DAG$children, DAG$parents_same_time, SIMPLIFY = F), function(x)lower_tri_idx(length(x), T))
+  lower_tri_idx_DAG$previous_times = lapply(DAG$parents_previous_times, function(x)lower_tri_idx(length(x), T))
+  lower_tri_idx_DAG
+}
+
+lower_tri_idx_DAG = get_lower_tri_idx_DAG(DAG)
+
+# get var idx in lower tri mat
+
+get_var_idx = function(DAG, var_tag)
+{
+  n_var = max(var_tag)
+  var_idx = list()
+  var_idx$current_time = lapply(mapply(c,DAG$children, DAG$parents_same_time, SIMPLIFY = F), function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = T))
+  var_idx$previous_times = lapply(DAG$parents_previous_times, function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = T))
+  var_idx$cross = mapply(
+    function(x, y)position_in_lower_tri(rep(x, length(y)), rep(y, each = length(c)), n_var),
+    lapply(mapply(c,DAG$children, DAG$parents_same_time, SIMPLIFY = F), function(x)var_tag[x]),
+    lapply(DAG$parents_previous_times                                 , function(x)var_tag[x])
+  )
+  lower_tri_var_idx
+}
+
+var_idx = get_var_idx(DAG, var_tag = var_tag)
 
 
-# Pre-computing elements
+# Pre-computing range and multiplier
 multiplier = get_multiplier(
   a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
   r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, u = u
@@ -52,18 +120,16 @@ effective_range = get_effective_range(
 )
 
 
-
-my_image = function(m)image(t(m)[,nrow(m):1])
-
 i=1
 
 multi_Vecchia = function(
-  DAG, 
-  locs, var_tag, 
-  multiplier, effective_range, 
-  rho_vec, 
-  compute_derivative_wrt_rho = F
-  )
+    DAG, 
+    rho_idx, lower_tri_idx_DAG, var_idx,
+    locs, var_tag, 
+    multiplier, effective_range, 
+    rho_vec, 
+    compute_derivative_wrt_rho = F
+)
 {
   res = list()
   res$coeffs = list()
@@ -147,21 +213,21 @@ tatata = Matrix::bdiag(lapply(seq(10000), function(i)matrix(1)))
 tatato = Matrix::sparseMatrix(i = ceiling(10000*runif(100000)), 
                               j = ceiling(10000*runif(100000)), 
                               x= rnorm(100000)
-                              )
+)
 tatato = Matrix::crossprod(tatato)
 
-  tatato = Matrix::sparseMatrix(i = ceiling(10000*runif(100000)), 
-                                j = ceiling(10000*runif(100000)), 
-                                x= rnorm(100000)
-  )
-  tatato = Matrix::crossprod(tatato)
+tatato = Matrix::sparseMatrix(i = ceiling(10000*runif(100000)), 
+                              j = ceiling(10000*runif(100000)), 
+                              x= rnorm(100000)
+)
+tatato = Matrix::crossprod(tatato)
 t1 = Sys.time()
 sapply(seq(1000), function(i)
 {
-#  tatato+tatata
+  #  tatato+tatata
   tatato[seq(9000, 10000), seq(9000, 10000)]
-return(0)
+  return(0)
 }
-  )
+)
 Sys.time()-t1
 

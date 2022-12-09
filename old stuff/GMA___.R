@@ -5,12 +5,12 @@
 # generate test data
 set.seed(1)
 n_var = 10
+n_loc = 40
 
-
-locs_1 = 10*cbind(runif(40), runif(40))
-locs_2 = 10*cbind(runif(50), runif(50))
-var_tag_1 = 1+floor(n_var*runif(40))
-var_tag_2 = 1+floor(n_var*runif(50))
+locs = 10*cbind(runif(n_loc), runif(n_loc))
+var_tag = 1+floor(n_var*runif(n_loc))
+#locs = cbind(runif(30), runif(30))
+#var_tag = 1+rbinom(30, n_var, 1/n_var)
 
 rho = GpGp::exponential_isotropic(c(1, 1, 0), .1*matrix(rnorm(2*n_var), n_var))
 rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
@@ -28,9 +28,9 @@ A_vec = runif(n_var)
 u = seq(0, 5)
 
 
-######################################
-# functions to get components of GMA #
-######################################
+###############################################################################
+# functions to get components of GMA and their variations wrt some parameters #
+###############################################################################
 
 get_multiplier = function(
     a, b, cc, delta, lambda, r, 
@@ -189,14 +189,14 @@ put_ones_in_rho_vec = function(rho_vec)
 ######################
 
 # Toy example  
-multiplier = get_multiplier(
-  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
-  r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, u = u
-)
-effective_range = get_effective_range(
-  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
-  r = r, A_vec = A_vec, a2_vec = a2_vec, u = u
-)
+#multiplier = get_multiplier(
+#  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+#  r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, u = u
+#)
+#effective_range = get_effective_range(
+#  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+#  r = r, A_vec = A_vec, a2_vec = a2_vec, u = u
+#)
 
 
 # compute unique elements of GMA covmat
@@ -239,82 +239,19 @@ GMA_compressed = function(
 }
 
 
-
-
-# elements of rectangular GMA matrix
-GMA_rectangular = function(
-    locs_1, locs_2, 
-    var_tag_1, var_tag_2,
-    multiplier, 
-    effective_range,
-    nu_, 
-    rho_vec_with_ones, 
-    n_var
-)
-{
-  # size of spatial sets of interest
-  n_loc_1 = nrow(locs_1)
-  n_loc_2 = nrow(locs_1)
-  n_lags = nrow(multiplier)
-  # var combinations
-  tatato = expand.grid(var_tag_1, var_tag_2)
-  var_idx = position_in_lower_tri(tatato[,1], tatato[,2], n_var)
-  # distance between locs pairs
-  h = fields::rdist(locs_1, locs_2)
-  h[h==0] = min(h[h!=0])*.0001
-  # creating matrices
-  res = list()
-  res$covmat_without_rho = array(0, c(dim(h), nrow(multiplier)))
-  res$covmat = array(0, c(dim(h), nrow(multiplier)))
-  
-  # looping over time lags
-  for(i_lag in seq(n_lags)){
-    # index of position in the covariance matrix
-    # covariance without correlation
-    res$covmat_without_rho[,,i_lag] = 
-      Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
-      multiplier[i_lag, var_idx]
-    # covariance
-    res$covmat[,,i_lag] = res$covmat_without_rho[,,i_lag] * rho_vec_with_ones[var_idx]
-  }
-  res
-}
-
-
 expand_nu = function(nu_vec){nu_ = outer(nu_vec, nu_vec, "+") ; nu_ = nu_/2; nu_ = nu_[lower.tri(nu_, T)];nu_}
 
 # carry on with toy example
 
-covmat_coeffs_1  =   GMA_compressed(
-  locs = locs_1, 
-  var_tag = var_tag_1,
-  multiplier = multiplier[1,,drop=FALSE], 
-  effective_range = effective_range,
-  nu_ = expand_nu(nu_vec),
-  n_var =  n_var, 
-  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
-)
-covmat_coeffs_2  =   GMA_compressed(
-  locs = locs_2, 
-  var_tag = var_tag_2,
-  multiplier = multiplier[-nrow(multiplier),,drop=FALSE], 
-  effective_range = effective_range,
-  nu_ = expand_nu(nu_vec),
-  n_var =  n_var, 
-  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
-)
-
-covmat_coeffs_12  =   GMA_rectangular(
-  locs_1 = locs_1, 
-  locs_2 = locs_2, 
-  var_tag_1 = var_tag_1,
-  var_tag_2 = var_tag_2,
-  multiplier = multiplier[-1,,drop=FALSE], 
-  effective_range = effective_range,
-  nu_ = expand_nu(nu_vec),
-  n_var =  n_var, 
-  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
-)
+#covmat_coeffs  =   GMA_compressed(
+#  locs = locs, 
+#  var_tag = var_tag,
+#  multiplier = multiplier, 
+#  effective_range = effective_range,
+#  nu_ = expand_nu(nu_vec),
+#  n_var =  n_var, 
+#  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
+#)
 
 # block_lower_tri_idx = lower_tri_idx(n_loc, T)
 
@@ -333,7 +270,6 @@ expand_covmat_into_blocks = function(covmat_coeffs, n_loc, block_lower_tri_idx)
   blocks  
 }
 
-
 expand_block_toeplitz_covmat = function(covmat_coeffs, block_lower_tri_idx, n_loc)
 {
   blocks = expand_covmat_into_blocks(covmat_coeffs, n_loc, block_lower_tri_idx)
@@ -348,27 +284,6 @@ expand_block_toeplitz_covmat = function(covmat_coeffs, block_lower_tri_idx, n_lo
   res
 }
 
-covmat_previous_periods = (expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, n_loc = 50, block_lower_tri_idx = lower_tri_idx(50, T)))
-covmat_current_period = expand_covmat_into_blocks(covmat_coeffs = covmat_coeffs_1$covmat, n_loc = 40, block_lower_tri_idx = lower_tri_idx(40, T))[[1]]
-side_blocks_rectangles = covmat_coeffs_12$covmat
-
-
-expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_period, side_blocks_rectangles = NULL)
-{
-  if(is.null(covmat_previous_periods)&is.null(side_blocks_rectangles))return(covmat_current_period)
-  res = matrix(0, ncol(covmat_previous_periods)+ncol(covmat_current_period), ncol(covmat_previous_periods)+ncol(covmat_current_period))
-  res[-seq(ncol(covmat_current_period)), -seq(ncol(covmat_current_period))] = covmat_previous_periods
-  res[seq(ncol(covmat_current_period)), seq(ncol(covmat_current_period))] = covmat_current_period
-  
-  res[seq(ncol(covmat_current_period)), -seq(ncol(covmat_current_period))] = unlist(side_blocks_rectangles)
-  res[-seq(ncol(covmat_current_period)), seq(ncol(covmat_current_period))] = t(res[seq(ncol(covmat_current_period)), -seq(ncol(covmat_current_period))])
-  res
-}
-
-
-
-
-
 multiply_vector_block_toeplitz_sparse = function(v, covmat_coeffs, n_loc, idx_mat)
 {
   k = length(blocks)
@@ -382,8 +297,6 @@ multiply_vector_block_toeplitz_sparse = function(v, covmat_coeffs, n_loc, idx_ma
   }
   res
 }
-
-multiply_vector_full_covmat_sparse
 
 
 #  image(expand_block_toeplitz_covmat(covmat_coeffs$covmat, n_loc, block_lower_tri_idx))

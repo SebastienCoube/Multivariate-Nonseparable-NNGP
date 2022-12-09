@@ -48,7 +48,15 @@
 #### 
 # var_tag must be integer and unique(var_tag) must be increasing
 find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE){
-  if(m_other_vars==0 & m_same_var==0)return(GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat))
+  if(m_other_vars==0 & m_same_var==0)
+  {
+    NNarray = GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat)
+    NNarray = NNarray[,-1]
+    NNarray = split(NNarray, row(NNarray))
+    NNarray = lapply(NNarray, na.omit)
+    return(NNarray)
+  }
+  
   # number of locations
   n <- nrow(locs)
   nvar = length(unique(var_tag))
@@ -134,21 +142,6 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
   NNlist = mapply(c, NNlist_closest, NNlists_quotas)
   NNlist = lapply(NNlist, function(x)c(na.omit(x)))
 
-#  NNarray = matrix(NA, length(NNlist), max(sapply(NNlist, length))+1)
-#  ##NNarray[cbind(
-#  ##  rep(seq(length(NNlist)), sapply(NNlist, length)), 
-#  ##  unlist(lapply(NNlist, function(x)seq(length(x))))[-c(1, 2)]+1
-#  ##  )] = unlist(NNlist)
-#  NNarray[,-1][
-#    cbind(
-#      rep(seq(length(NNlist)), sapply(NNlist, length)),
-#      unlist(lapply(NNlist, function(x)
-#      {
-#        if(length(x)==0)return(c())
-#        if(length(x)!=0)return(seq(length(x)))
-#      })))] = unlist(NNlist)
-#  NNarray[,1] = seq(n)
-#  return(NNarray)
   return(NNlist)
 }
 
@@ -205,7 +198,7 @@ find_unordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_othe
   # split
   NNlist_closest = split(NNlist_closest, row(NNlist_closest))
   # remove already chosen nn because of quotas
-  NNlist_closest = mapply(setdiff, NNlist_closest, NNlists_quotas)
+  NNlist_closest = mapply(setdiff, NNlist_closest, NNlists_quotas, SIMPLIFY = F)
   # take m_whatever_closest first neighbors
   NNlist_closest = lapply(NNlist_closest, function(x)x[1:m_whatever_closest])
   
@@ -223,15 +216,30 @@ find_unordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_othe
 
 # test data
 
-## locs = matrix(runif(500), ncol = 2)
-## var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
-## m_whatever_closest = 10
-## m_same_var = 5
-## m_other_vars = 3
-## 
-## 
-## nnlist_ordered = find_ordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag)
-## nnlist_unordered = find_unordered_nn_multi(locs, m_whatever_closest = 0, m_same_var = 5, m_other_vars = 2, var_tag = var_tag)
+locs = matrix(runif(500), ncol = 2)
+var_tag = 1 + floor(3 * runif(nrow(locs))) ; var_tag = match(var_tag, unique(var_tag))
+m_whatever_closest = 10
+m_same_var = 5
+m_other_vars = 3
+
+
+nnlist_ordered = find_ordered_nn_multi(locs, m_whatever_closest = 5, m_same_var = 0, m_other_vars = 0, var_tag = var_tag)
+
+nnlist_unordered = find_unordered_nn_multi(locs, m_whatever_closest = 5, m_same_var = 0, m_other_vars = 0, var_tag = var_tag)
+
+i= 40
+
+# same time neighbors
+plot(locs[1:i,], col = var_tag, pch = 16, cex = .5)
+points(locs[i,,drop = F], col = var_tag[i], pch = 2)
+points(locs[i,,drop = F], col = var_tag[i], pch = 2, cex = 2)
+points(locs[nnlist_ordered[[i]],], col = var_tag[nnlist_ordered[[i]]], pch = 1)
+
+
+# previous neighbors
+plot(locs, col = var_tag, pch = 16, cex = .5)
+points(locs[i,,drop = F], col = var_tag[i], pch = 2, cex = 2)
+points(locs[nnlist_unordered[[i]],], col = var_tag[nnlist_unordered[[i]]], pch = 1)
 
 
 
