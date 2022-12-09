@@ -142,37 +142,48 @@ multi_Vecchia = function(
   #t1 = Sys.time()
   for(i in seq(length(DAG[[1]])))
   {
-    #putting parents first, children then so that children arrive at the end of inverse Cholesky factor
-    locs_ = locs[c(DAG$parents[[i]],DAG$children[[i]]),] # subset locs
-    var_tag_ = var_tag[c(DAG$parents[[i]], DAG$children[[i]])] # subset var tag
-    n_loc_ = nrow(locs_)
-    
-    # computing covmat
-    block_lower_tri_idx = lower_tri_idx(n_loc_, diag = T)
-    covmat_coeffs = GMA_compressed(
-      locs = locs_, 
-      var_tag = var_tag_,
+    covmat_coeffs_same_time = GMA_compressed(
+      locs = locs[c(DAG$children[[i]], DAG$parents_same_time[[i]]),, drop = F],
+      lower_tri_idx = lower_tri_idx_DAG$same_time[[i]],
+      var_idx = var_idx$current_time[[i]],
+      multiplier = multiplier[1,,drop=FALSE], 
+      effective_range = effective_range[1,,drop=FALSE],
+      nu_ = nu_,
+      rho_vec_with_ones = rho_vec_with_ones
+    )
+    covmat_coeffs_previous = GMA_compressed(
+      locs = locs[DAG$parents_previous_times[[i]],, drop = F],
+      lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]],
+      var_idx = var_idx$previous_times[[i]],
       multiplier = multiplier, 
       effective_range = effective_range,
-      nu_ = nu_, 
-      rho_vec_with_ones = rho_vec_with_ones, 
-      n_var = n_var
-    )$covmat
-    
+      nu_ = nu_,
+      rho_vec_with_ones = rho_vec_with_ones
+    )
+    covmat_coeffs_cross =  GMA_rectangular(
+      locs_1 = locs[c(DAG$children[[i]], DAG$parents_same_time[[i]]),, drop = F], 
+      locs_2 = locs[DAG$parents_previous_times[[i]],, drop = F], 
+      var_idx =  var_idx$cross[[i]],
+      multiplier = multiplier, 
+      effective_range = effective_range,
+      nu_ = expand_nu(nu_vec),
+      rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
+    )
     covmat_chol = chol(
-      expand_block_toeplitz_covmat(
-        covmat_coeffs = covmat_coeffs, 
-        block_lower_tri_idx = block_lower_tri_idx, 
-        n_loc = n_loc_
+      expand_full_covmat(
+        covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
+        covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
+        side_blocks_rectangles  = covmat_coeffs_cross$covmat
       )
     )
     
-    M = matrix(0, n_time* n_loc_, length(DAG$children[[i]]))
+    M = matrix(0, nrow(covmat_chol), length(DAG$children[[i]]))
     M[
       cbind(
         seq(nrow(M)-length(DAG$children[[i]])+1, nrow(M)), 
         seq(length(DAG$children[[i]])))
     ]=1
+    #my_image(covmat_chol)
     res$coeffs[[i]] = backsolve(
       r =  covmat_chol, 
       M, transpose = F

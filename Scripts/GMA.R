@@ -113,7 +113,7 @@ Matern = function(h, r, nu_)(r * h)^nu_ * besselK(r * h, nu_)
 #                    10   | 4 4 
 #                      
 
-lower_tri_idx = function(n_loc, diag = F)
+get_lower_tri_idx = function(n_loc, diag = F)
 {
   if(diag == F)
   {
@@ -134,7 +134,7 @@ lower_tri_idx = function(n_loc, diag = F)
     )
   }
 }
-lower_tri_idx(10)
+get_lower_tri_idx(10)
 
 # given three integers i, j, n_loc, gives the position of coefficient (i, j)
 # in the n_loc*n_loc square matrix in the lower triangular coefficients
@@ -166,7 +166,7 @@ position_in_lower_tri = function(i, j, n_loc)
 # matrix of size n_var * n_var
 position_in_lower_tri_cross_vec = function(i_vec, n_var, diag = F)
 {  
-  idx = lower_tri_idx(length(i_vec), diag = diag)
+  idx = get_lower_tri_idx(length(i_vec), diag = diag)
   position_in_lower_tri(i_vec[idx[,1]], i_vec[idx[,2]], n_var)
 }
 
@@ -206,6 +206,7 @@ effective_range = get_effective_range(
 GMA_compressed = function(
     locs, 
     var_idx,
+    lower_tri_idx,
     multiplier, 
     effective_range,
     nu_, 
@@ -217,13 +218,12 @@ GMA_compressed = function(
   n_lags = nrow(multiplier)
   # distance between locs pairs
   h = as.matrix(dist(locs, diag = T));h = h[lower.tri(h, diag = T)]
+  if(all(h==0)) h = .00001
   h[h==0] = min(h[h!=0])*.0001
-  # indices of pairs in covariance matrix
-  idx = lower_tri_idx(n_loc, diag = T);idx[,1] = idx[,1]
   # creating matrices
   res = list()
-  res$covmat_without_rho = matrix(0, nrow(idx), n_lags)
-  res$covmat = matrix(0, nrow(idx), n_lags)
+  res$covmat_without_rho = matrix(0, nrow(lower_tri_idx), n_lags)
+  res$covmat = matrix(0, nrow(lower_tri_idx), n_lags)
   
   # looping over time lags
   for(i_lag in seq(n_lags)){
@@ -275,8 +275,6 @@ GMA_rectangular = function(
   }
   res
 }
-#  tatato = expand.grid(var_tag_1, var_tag_2)
-#  var_idx = position_in_lower_tri(tatato[,1], tatato[,2], n_var)
 
 
 expand_nu = function(nu_vec){nu_ = outer(nu_vec, nu_vec, "+") ; nu_ = nu_/2; nu_ = nu_[lower.tri(nu_, T)];nu_}
@@ -285,6 +283,7 @@ expand_nu = function(nu_vec){nu_ = outer(nu_vec, nu_vec, "+") ; nu_ = nu_/2; nu_
 
 covmat_coeffs_1  =   GMA_compressed(
   locs = locs_1, 
+  lower_tri_idx = get_lower_tri_idx(nrow(locs_1), diag = T),
   var_idx = position_in_lower_tri_cross_vec(var_tag_1, n_var, diag = T),
   multiplier = multiplier[1,,drop=FALSE], 
   effective_range = effective_range,
@@ -293,6 +292,7 @@ covmat_coeffs_1  =   GMA_compressed(
 )
 covmat_coeffs_2  =   GMA_compressed(
   locs = locs_2, 
+  lower_tri_idx = get_lower_tri_idx(nrow(locs_2), diag = T),
   var_idx = position_in_lower_tri_cross_vec(var_tag_2, n_var, diag = T),
   multiplier = multiplier[-nrow(multiplier),,drop=FALSE], 
   effective_range = effective_range,
@@ -300,11 +300,13 @@ covmat_coeffs_2  =   GMA_compressed(
   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
 )
 
+
+tatato = expand.grid(var_tag_1, var_tag_2)
+var_idx_12 = position_in_lower_tri(tatato[,1], tatato[,2], n_var)
 covmat_coeffs_12  =   GMA_rectangular(
   locs_1 = locs_1, 
   locs_2 = locs_2, 
-  var_tag_1 = var_tag_1,
-  var_tag_2 = var_tag_2,
+  var_idx = var_idx_12,
   multiplier = multiplier[-1,,drop=FALSE], 
   effective_range = effective_range,
   nu_ = expand_nu(nu_vec),
@@ -312,7 +314,7 @@ covmat_coeffs_12  =   GMA_rectangular(
   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
 )
 
-# block_lower_tri_idx = lower_tri_idx(n_loc, T)
+# block_lower_tri_idx = get_lower_tri_idx(n_loc, T)
 
 # expand each sub matrix
 expand_covmat_into_blocks = function(covmat_coeffs, n_loc, block_lower_tri_idx)
@@ -344,8 +346,8 @@ expand_block_toeplitz_covmat = function(covmat_coeffs, block_lower_tri_idx, n_lo
   res
 }
 
-covmat_previous_periods = (expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, n_loc = 90, block_lower_tri_idx = lower_tri_idx(90, T)))
-covmat_current_period = expand_covmat_into_blocks(covmat_coeffs = covmat_coeffs_1$covmat, n_loc = 40, block_lower_tri_idx = lower_tri_idx(40, T))[[1]]
+covmat_previous_periods = (expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, n_loc = 90, block_lower_tri_idx = get_lower_tri_idx(90, T)))
+covmat_current_period = expand_covmat_into_blocks(covmat_coeffs = covmat_coeffs_1$covmat, n_loc = 40, block_lower_tri_idx = get_lower_tri_idx(40, T))[[1]]
 side_blocks_rectangles = covmat_coeffs_12$covmat
 
 
@@ -361,8 +363,8 @@ expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_per
   res
 }
 
-full_covmat = expand_full_covmat(covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, block_lower_tri_idx = lower_tri_idx(90, T), n_loc = 90), 
-                                 covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = lower_tri_idx(40, T), n_loc = 40), 
+full_covmat = expand_full_covmat(covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, block_lower_tri_idx = get_lower_tri_idx(90, T), n_loc = 90), 
+                                 covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = get_lower_tri_idx(40, T), n_loc = 40), 
                                  side_blocks_rectangles  = covmat_coeffs_12$covmat
                                  )
 chol(full_covmat)
@@ -428,8 +430,8 @@ multiply_vector_full_covmat_sparse = function(
   res
 }
 
-idx_mat_current_period  = lower_tri_idx(40, T) 
-idx_mat_previous_period = lower_tri_idx(90, T)
+idx_mat_current_period  = get_lower_tri_idx(40, T) 
+idx_mat_previous_period = get_lower_tri_idx(90, T)
 
 idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=-1
 idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
