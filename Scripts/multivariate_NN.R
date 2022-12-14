@@ -207,7 +207,7 @@ find_unordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_othe
   
   # adding same index because i conditions on i at previous times
   NNlist = mapply(c, lapply(seq(n), function(x)x), NNlist, SIMPLIFY = F)
-  
+  NNlist = lapply(NNlist, FUN = unique)
   return(NNlist)
 }
 

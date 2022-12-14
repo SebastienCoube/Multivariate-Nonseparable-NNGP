@@ -4,11 +4,15 @@
 
 Rcpp::sourceCpp("Scripts/multiply.cpp")
 
+# flip image function to match matrix
+my_image = function(m)image(t(m)[,nrow(m):1])
+
+
 
 
 # generate test data
-set.seed(1)
-n_var = 3
+set.seed(10)
+n_var = 1
 
 
 locs_1 = 10*cbind(runif(40), runif(40))
@@ -19,7 +23,7 @@ var_tag_2 = c(var_tag_1, 1+floor(n_var*runif(50)))
 rho = GpGp::exponential_isotropic(c(1, 1, 0), .1*matrix(rnorm(2*n_var), n_var))
 rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
 
-a2_vec = runif(n_var)
+a2_vec = 100*runif(n_var)
 nu_vec = .5 + 2*runif(n_var)
 alpha = .0001 * runif(1)
 a = runif(1) 
@@ -267,11 +271,11 @@ GMA_rectangular = function(
   for(i_lag in seq(n_lags)){
     # index of position in the covariance matrix
     # covariance without correlation
-    res$covmat_without_rho[,,i_lag] = 
+    res$covmat_without_rho[,,n_lags-i_lag+1] = 
       Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
       multiplier[i_lag, var_idx]
     # covariance
-    res$covmat[,,i_lag] = res$covmat_without_rho[,,i_lag] * rho_vec_with_ones[var_idx]
+    res$covmat[,,n_lags-i_lag+1] = res$covmat_without_rho[,,n_lags-i_lag+1] * rho_vec_with_ones[var_idx]
   }
   res
 }
@@ -308,7 +312,7 @@ covmat_coeffs_12  =   GMA_rectangular(
   locs_2 = locs_2, 
   var_idx = var_idx_12,
   multiplier = multiplier[-1,,drop=FALSE], 
-  effective_range = effective_range,
+  effective_range = effective_range[-1,,drop=FALSE],
   nu_ = expand_nu(nu_vec),
   n_var =  n_var, 
   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
@@ -355,11 +359,11 @@ expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_per
 {
   if(is.null(covmat_previous_periods)&is.null(side_blocks_rectangles))return(covmat_current_period)
   res = matrix(0, ncol(covmat_previous_periods)+ncol(covmat_current_period), ncol(covmat_previous_periods)+ncol(covmat_current_period))
-  res[-seq(ncol(covmat_current_period)), -seq(ncol(covmat_current_period))] = covmat_previous_periods
-  res[seq(ncol(covmat_current_period)), seq(ncol(covmat_current_period))] = covmat_current_period
+  res[seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))] = covmat_previous_periods
+  res[-seq(ncol(covmat_previous_periods)), -seq(ncol(covmat_previous_periods))] = covmat_current_period
   
-  res[seq(ncol(covmat_current_period)), -seq(ncol(covmat_current_period))] = unlist(side_blocks_rectangles)
-  res[-seq(ncol(covmat_current_period)), seq(ncol(covmat_current_period))] = t(res[seq(ncol(covmat_current_period)), -seq(ncol(covmat_current_period))])
+  res[-seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))] = unlist(side_blocks_rectangles)
+  res[seq(ncol(covmat_previous_periods)), -seq(ncol(covmat_previous_periods))] = t(res[-seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))])
   res
 }
 
@@ -368,7 +372,7 @@ full_covmat = expand_full_covmat(covmat_previous_periods = expand_block_toeplitz
                                  side_blocks_rectangles  = covmat_coeffs_12$covmat
                                  )
 chol(full_covmat)
-image(full_covmat)
+my_image(full_covmat)
 
 multiply_vector_block_toeplitz_sparse = function(v, covmat_coeffs, n_loc, idx_mat)
 {
@@ -385,63 +389,80 @@ multiply_vector_block_toeplitz_sparse = function(v, covmat_coeffs, n_loc, idx_ma
 }
 
 
-# sparse multiplication for upper right blocks
-v =  rnorm(180)
-idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=0
-idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
+### sparse multiplication for upper right blocks
+##v =  rnorm(180)
+##idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=0
+##idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
+##
+##Multiply_vector_side_blocks_upper_right(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
+##  (covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(90)]-
+##  (covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(91, 180)]
+##
+### sparse multiplication for left vertical blocks
+##v =  rnorm(40)
+##
+##Multiply_vector_side_blocks_vertical_left(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
+##  c(as.vector(Matrix::t(covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v),
+##    as.vector(Matrix::t(covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v))
+##
 
-Multiply_vector_side_blocks_upper_right(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
-  (covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(90)]-
-  (covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(91, 180)]
 
-# sparse multiplication for left vertical blocks
-v =  rnorm(40)
+###multiply_vector_full_covmat_sparse = function(
+###    v, 
+###    covmat_coeffs_current_period,  n_loc_current_period,  idx_mat_current_period, 
+###    covmat_coeffs_previous_period, n_loc_previous_period, idx_mat_previous_period, 
+###    side_blocks_rectangles, idx_mat_side_block_rectangles
+###)
+###{
+###  res = matrix(0, length(v), 1)
+###  res[-seq(n_loc_current_period)] = multiply_vector_block_toeplitz_sparse(
+###    v = v[-seq(n_loc_current_period)], 
+###    covmat_coeffs = covmat_coeffs_previous_period, 
+###    n_loc = n_loc_previous_period, 
+###    idx_mat = idx_mat_previous_period
+###  )
+###  res[-seq(n_loc_current_period)] = res[-seq(n_loc_current_period)] + 
+###    Multiply_vector_side_blocks_vertical_left(v = v[seq(n_loc_current_period)], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
+###  res[seq(n_loc_current_period)] = multiply_vector_block_toeplitz_sparse(
+###    v = v[seq(n_loc_current_period)], 
+###    covmat_coeffs = covmat_coeffs_current_period, 
+###    n_loc = n_loc_current_period, 
+###    idx_mat = idx_mat_current_period
+###  )
+###  res[seq(n_loc_current_period)] = res[seq(n_loc_current_period)] + 
+###    Multiply_vector_side_blocks_upper_right(v = v[-seq(n_loc_current_period)], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
+###  res
+###}
+###
+###idx_mat_current_period  = get_lower_tri_idx(40, T) 
+###idx_mat_previous_period = get_lower_tri_idx(90, T)
+###
+###idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=-1
+###idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
+###
+###v=  rnorm(nrow(full_covmat))
+###multiply_vector_full_covmat_sparse(
+###  v = v, 
+###  covmat_coeffs_current_period = covmat_coeffs_1$covmat,  n_loc_current_period = 40,   idx_mat_current_period = idx_mat_current_period,
+###  covmat_coeffs_previous_period = covmat_coeffs_2$covmat, n_loc_previous_period =  90, idx_mat_previous_period = idx_mat_previous_period,
+###  side_blocks_rectangles = covmat_coeffs_12$covmat, idx_mat_side_block_rectangles = idx_mat_12
+###  )- 
+###full_covmat%*%v  
 
-Multiply_vector_side_blocks_vertical_left(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
-  c(as.vector(Matrix::t(covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v),
-    as.vector(Matrix::t(covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v))
 
-
-
-multiply_vector_full_covmat_sparse = function(
-    v, 
-    covmat_coeffs_current_period,  n_loc_current_period,  idx_mat_current_period, 
-    covmat_coeffs_previous_period, n_loc_previous_period, idx_mat_previous_period, 
-    side_blocks_rectangles, idx_mat_side_block_rectangles
+locs_1 = as.matrix(expand.grid(seq(40), seq(40))/40)
+var_tag_1 = 1+floor(n_var*runif(nrow(locs_1)))
+covmat_coeffs_1  =   GMA_compressed(
+  locs = locs_1, 
+  lower_tri_idx = get_lower_tri_idx(nrow(locs_1), diag = T),
+  var_idx = position_in_lower_tri_cross_vec(var_tag_1, n_var, diag = T),
+  multiplier = multiplier[1,,drop=FALSE], 
+  effective_range = effective_range,
+  nu_ = expand_nu(nu_vec),
+  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
 )
-{
-  res = matrix(0, length(v), 1)
-  res[-seq(n_loc_current_period)] = multiply_vector_block_toeplitz_sparse(
-    v = v[-seq(n_loc_current_period)], 
-    covmat_coeffs = covmat_coeffs_previous_period, 
-    n_loc = n_loc_previous_period, 
-    idx_mat = idx_mat_previous_period
-  )
-  res[-seq(n_loc_current_period)] = res[-seq(n_loc_current_period)] + 
-    Multiply_vector_side_blocks_vertical_left(v = v[seq(n_loc_current_period)], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
-  res[seq(n_loc_current_period)] = multiply_vector_block_toeplitz_sparse(
-    v = v[seq(n_loc_current_period)], 
-    covmat_coeffs = covmat_coeffs_current_period, 
-    n_loc = n_loc_current_period, 
-    idx_mat = idx_mat_current_period
-  )
-  res[seq(n_loc_current_period)] = res[seq(n_loc_current_period)] + 
-    Multiply_vector_side_blocks_upper_right(v = v[-seq(n_loc_current_period)], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
-  res
-}
 
-idx_mat_current_period  = get_lower_tri_idx(40, T) 
-idx_mat_previous_period = get_lower_tri_idx(90, T)
-
-idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=-1
-idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
-
-v=  rnorm(nrow(full_covmat))
-multiply_vector_full_covmat_sparse(
-  v = v, 
-  covmat_coeffs_current_period = covmat_coeffs_1$covmat,  n_loc_current_period = 40,   idx_mat_current_period = idx_mat_current_period,
-  covmat_coeffs_previous_period = covmat_coeffs_2$covmat, n_loc_previous_period =  90, idx_mat_previous_period = idx_mat_previous_period,
-  side_blocks_rectangles = covmat_coeffs_12$covmat, idx_mat_side_block_rectangles = idx_mat_12
-  )- 
-full_covmat%*%v  
-
+Bidart::plot_pointillist_painting(
+  locs_1, 
+  t(chol(expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = get_lower_tri_idx(nrow(locs_1), T), n_loc = nrow(locs_1))))%*% rnorm(nrow(locs_1))
+)
