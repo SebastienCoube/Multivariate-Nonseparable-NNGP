@@ -1,7 +1,7 @@
-##Rcpp::sourceCpp("Scripts/multiply.cpp")
-##source("Scripts/GMA.R")
-##source("Scripts/grouping.R")
-##source("Scripts/multivariate_NN.R")
+#Rcpp::sourceCpp("Scripts/multiply.cpp")
+#source("Scripts/GMA.R")
+#source("Scripts/grouping.R")
+#source("Scripts/multivariate_NN.R")
 
 
 # flip image function to match matrix
@@ -11,11 +11,12 @@ my_image = function(m)image(t(m)[,nrow(m):1])
 # simulate data
 set.seed(2)
 
-n_var = 1
-n_time = 5
+n_var = 2
+n_time = 4
 
 # spatial locations and variable index
-locs = as.matrix(expand.grid(seq(40), seq(40)))/20#cbind(runif(n_loc), runif(n_loc))
+locs = as.matrix(expand.grid(seq(50), seq(50)))/20#cbind(runif(n_loc), runif(n_loc))
+locs = locs + rnorm(length(locs), 0, .0001)
 locs = locs[sample(seq(nrow(locs)), size = nrow(locs), F),]
 n_loc =nrow(locs)
 row.names(locs) = seq(n_loc)
@@ -25,8 +26,8 @@ var_tag = ceiling(n_var*runif(n_loc));var_tag = match(var_tag, unique(var_tag))
 rho = GpGp::exponential_isotropic(c(1, 1, 0), .1*matrix(rnorm(2*n_var), n_var))
 rho[]=1
 rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
-a2_vec = rep(1, n_var)#.000001*runif(n_var)
-nu_vec = rep(1, n_var)#.5 + 2*runif(n_var)
+a2_vec = rep(100, n_var)#.000001*runif(n_var)
+nu_vec = rep(1.5, n_var)#.5 + 2*runif(n_var)
 alpha = .01 * runif(1)
 a = runif(1) 
 b = runif(1) 
@@ -42,9 +43,10 @@ NNarray_same_time = find_ordered_nn_multi(locs = locs,
                             var_tag = var_tag, 
                             m_whatever_closest = 10, m_same_var = 5, m_other_vars = 0, 
                             lonlat = F)
+# HERE IS THE PROBLEM
 NNarray_pevious_times = find_unordered_nn_multi(locs = locs, 
                             var_tag = var_tag, 
-                            m_whatever_closest = 10, m_same_var = 5, m_other_vars = 0, 
+                            m_whatever_closest = 5, m_same_var = 0, m_other_vars = 0, 
                             lonlat = F)
 DAG = list(
   "children" = lapply(seq(n_loc), function(x)x), 
@@ -65,7 +67,7 @@ DAG = list(
 get_rho_idx_from_dag = function(DAG, var_tag)
 {
   n_var = max(var_tag)
-  idx_1 = mapply(c, DAG$children, DAG$parents_same_time)
+  idx_1 = mapply(c, DAG$parents_same_time, DAG$children)
   var_idx_current_time = lapply(idx_1, function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = T))
   var_idx_previous_times = lapply(DAG$parents_previous_times, function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = F))
   var_idx_cross = mapply(
@@ -94,7 +96,7 @@ rho_idx = get_rho_idx_from_dag(DAG = DAG, var_tag = var_tag )
 get_lower_tri_idx_DAG = function(DAG)
 {
   lower_tri_idx_DAG = list()
-  lower_tri_idx_DAG$same_time = lapply(mapply(c,DAG$children, DAG$parents_same_time, SIMPLIFY = F), function(x)get_lower_tri_idx(length(x), T))
+  lower_tri_idx_DAG$same_time = lapply(mapply(c, DAG$parents_same_time, DAG$children, SIMPLIFY = F), function(x)get_lower_tri_idx(length(x), T))
   lower_tri_idx_DAG$previous_times = lapply(DAG$parents_previous_times, function(x)get_lower_tri_idx(length(x), T))
   lower_tri_idx_DAG
 }
@@ -107,7 +109,7 @@ get_var_idx = function(DAG, var_tag)
 {
   n_var = max(var_tag)
   var_idx = list()
-  var_idx$current_time = lapply(mapply(c,DAG$children, DAG$parents_same_time, SIMPLIFY = F), function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = T))
+  var_idx$current_time = lapply(mapply(c,DAG$parents_same_time, DAG$children, SIMPLIFY = F), function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = T))
   var_idx$previous_times = lapply(DAG$parents_previous_times, function(idx)position_in_lower_tri_cross_vec(var_tag[idx], n_var = n_var, diag = T))
   var_idx$cross = mapply(
     function(x, y)
@@ -116,7 +118,7 @@ get_var_idx = function(DAG, var_tag)
       var_idx_12 = position_in_lower_tri(tatato[,1], tatato[,2], n_var)
     }
       ,
-    lapply(mapply(c,DAG$children, DAG$parents_same_time, SIMPLIFY = F), function(x)var_tag[x]),
+    lapply(mapply(c, DAG$parents_same_time, DAG$children, SIMPLIFY = F), function(x)var_tag[x]),
     lapply(DAG$parents_previous_times                                 , function(x)var_tag[x])
   )
   var_idx
@@ -139,12 +141,10 @@ effective_range = get_effective_range(
 
 i=10
 get_linv_coeffs = function(
-    DAG, 
-    rho_idx, lower_tri_idx_DAG, var_idx,
     locs, var_tag, 
+    DAG, 
     multiplier, effective_range, 
-    rho_vec, 
-    compute_derivative_wrt_rho = F
+    rho_vec
 )
 {
   res = list()
@@ -158,9 +158,9 @@ get_linv_coeffs = function(
   #t1 = Sys.time()
   for(i in seq(length(DAG[[1]])))
   {
-    print(i)
+    #print(i)
     covmat_coeffs_same_time = GMA_compressed(
-      locs = locs[c(DAG$children[[i]], DAG$parents_same_time[[i]]),, drop = F],
+      locs = locs[c(DAG$parents_same_time[[i]], DAG$children[[i]]),, drop = F],
       lower_tri_idx = lower_tri_idx_DAG$same_time[[i]],
       var_idx = var_idx$current_time[[i]],
       multiplier = multiplier[1,,drop=FALSE], 
@@ -179,7 +179,7 @@ get_linv_coeffs = function(
     )
     covmat_coeffs_cross =  
       GMA_rectangular(
-        locs_1 = locs[c(DAG$children[[i]], DAG$parents_same_time[[i]]),, drop = F], 
+        locs_1 = locs[c(DAG$parents_same_time[[i]], DAG$children[[i]]),, drop = F], 
         locs_2 = locs[DAG$parents_previous_times[[i]],, drop = F], 
         var_idx = var_idx$cross[[i]],
         multiplier = multiplier[-1,,drop=FALSE], 
@@ -188,25 +188,33 @@ get_linv_coeffs = function(
         n_var =  n_var, 
         rho_vec_with_ones = rho_vec_with_ones
       )
-  #my_image( expand_full_covmat(
-  #  covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
-  #  covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
-  #  side_blocks_rectangles  = covmat_coeffs_cross$covmat
-  #))
+ # my_image( expand_full_covmat(
+ #   covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
+ #   covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
+ #   side_blocks_rectangles  = covmat_coeffs_cross$covmat
+ # ))
     covmat_chol = chol(
       expand_full_covmat(
-        covmat_previous_periods = diag(nrow(expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])))),
+        covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
         covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
-        side_blocks_rectangles  = 0*covmat_coeffs_cross$covmat
+        side_blocks_rectangles  = covmat_coeffs_cross$covmat
       )
     )
     M = matrix(0, nrow(covmat_chol), length(DAG$children[[i]]))
     M[cbind(seq(nrow(covmat_chol)- length(DAG$children[[i]])+1, nrow(covmat_chol)), seq(length(DAG$children[[i]])))]=1
-    #my_image(covmat_chol)
     res$coeffs[[i]] = backsolve(
       r =  covmat_chol, 
       M
     )
+    #my_image(covmat_chol)
+    ### full_covmat = expand_full_covmat(
+    ###   covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
+    ###   covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
+    ###   side_blocks_rectangles  = 0*covmat_coeffs_cross$covmat
+    ### )
+    ### 1/sqrt(full_covmat[nrow(full_covmat), nrow(full_covmat)] - full_covmat[nrow(full_covmat), -nrow(full_covmat)]%*%solve(full_covmat[-nrow(full_covmat), -nrow(full_covmat)]) %*%full_covmat[nrow(full_covmat), -nrow(full_covmat)])
+    ### (solve(full_covmat[-nrow(full_covmat), -nrow(full_covmat)]) %*%full_covmat[nrow(full_covmat), -nrow(full_covmat)])/c(sqrt(full_covmat[nrow(full_covmat), nrow(full_covmat)] - full_covmat[nrow(full_covmat), -nrow(full_covmat)]%*%solve(full_covmat[-nrow(full_covmat), -nrow(full_covmat)]) %*%full_covmat[nrow(full_covmat), -nrow(full_covmat)]))
+    
     #plot(res$coeffs[[i]], solve(covmat_chol)[1,])
     # each row of solve covmat_chol factorizes the joint distribuion of children and parents
     # top rows = involves children + parents 
@@ -216,6 +224,131 @@ get_linv_coeffs = function(
   res
 }
 
+i=10
+get_linv_coeffs_and_derivative = function(
+    locs, var_tag, 
+    DAG, 
+    rho_idx, lower_tri_idx_DAG, var_idx,
+    multiplier, effective_range, 
+    rho_vec)
+{
+  res = list()
+  res$coeffs = list()
+  res$coeffs_derivatives = lapply(rho_idx, function(x)list())
+  
+  n_time = nrow(multiplier)
+  n_var = max(var_tag)
+  nu_ = expand_nu(nu_vec)
+  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
+  # looping over each block of the DAG
+  #t1 = Sys.time()
+  for(i in seq(length(DAG[[1]])))
+  {
+    # computing stuff
+    covmat_coeffs_same_time = GMA_compressed(
+      locs = locs[c(DAG$parents_same_time[[i]], DAG$children[[i]]),, drop = F],
+      lower_tri_idx = lower_tri_idx_DAG$same_time[[i]],
+      var_idx = var_idx$current_time[[i]],
+      multiplier = multiplier[1,,drop=FALSE], 
+      effective_range = effective_range,
+      nu_ = nu_,
+      rho_vec_with_ones = rho_vec_with_ones, return_with_rho = T
+    )
+    covmat_coeffs_previous = GMA_compressed(
+      locs = locs[DAG$parents_previous_times[[i]],, drop = F],
+      lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]],
+      var_idx = var_idx$previous_times[[i]],
+      multiplier = multiplier[-nrow(multiplier),,drop=FALSE], 
+      effective_range = effective_range,
+      nu_ = nu_,
+      rho_vec_with_ones = rho_vec_with_ones, return_with_rho = T
+    )
+    covmat_coeffs_cross =  
+      GMA_rectangular(
+        locs_1 = locs[c(DAG$parents_same_time[[i]], DAG$children[[i]]),, drop = F], 
+        locs_2 = locs[DAG$parents_previous_times[[i]],, drop = F], 
+        var_idx = var_idx$cross[[i]],
+        multiplier = multiplier[-1,,drop=FALSE], 
+        effective_range = effective_range[-1,,drop=FALSE],
+        nu_ = expand_nu(nu_vec),
+        n_var =  n_var, 
+        rho_vec_with_ones = rho_vec_with_ones, 
+        return_with_rho = T
+      )
+    # my_image( expand_full_covmat(
+    #   covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
+    #   covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
+    #   side_blocks_rectangles  = covmat_coeffs_cross$covmat
+    # ))
+    # computing Cholesky decomposition of covmat
+    full_covmat = expand_full_covmat(
+      covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
+      covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
+      side_blocks_rectangles  = covmat_coeffs_cross$covmat
+    )
+    covmat_chol = chol(full_covmat)
+    # backsolve to get conditional distribution
+    M = matrix(0, nrow(covmat_chol), length(DAG$children[[i]]))
+    M[cbind(seq(nrow(covmat_chol)- length(DAG$children[[i]])+1, nrow(covmat_chol)), seq(length(DAG$children[[i]])))]=1
+    res$coeffs[[i]] = backsolve(
+      r =  covmat_chol, 
+      M
+    )
+    # derivative of conditional distribution coefficients
+    
+    # covmat between children and the parents
+    Sigma_12 = full_covmat[-seq(nrow(full_covmat)-length(DAG$children[[i]])),,drop = F]
+    Sigma_12[, -seq(nrow(full_covmat)-length(DAG$children[[i]]))]=0
+    # covmat of children
+    Sigma_22 = full_covmat[-seq(nrow(full_covmat)-length(DAG$children[[i]])),-seq(nrow(full_covmat)-length(DAG$children[[i]])),drop = F]
+    # covmat without_rho
+    full_covmat_without_rho = expand_full_covmat(
+      covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat_without_rho,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
+      covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat_without_rho, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
+      side_blocks_rectangles  = covmat_coeffs_cross$covmat_without_rho
+    )
+    # passing to chol
+    chol_full_covmat_without_rho = chol(full_covmat_without_rho)
+    # between children and parents
+    Sigma_12_without_rho = full_covmat_without_rho[-seq(nrow(full_covmat)-length(DAG$children[[i]])), ,drop = F]
+    Sigma_12_without_rho[, -seq(nrow(full_covmat)-length(DAG$children[[i]]))]=0
+    # looping on rho
+    for(j in seq(length(rho_idx)))
+    {
+      apply(Sigma_12, 1, function(v)
+      multiply_vector_full_covmat_sparse(v = v, 
+                                         covmat_coeffs_current_period  = covmat_coeffs_same_time$covmat_without_rho, idx_mat_current_period        = rho_idx[[j]]$current_time[[i]],    n_loc_current_period  = length(DAG$parents_same_time[[i]])+length(DAG$children[[i]]), 
+                                         covmat_coeffs_previous_period = covmat_coeffs_previous$covmat_without_rho , idx_mat_previous_period       = rho_idx[[j]]$previous_times[[i]],  n_loc_previous_period = length(DAG$parents_previous_times[[i]]), 
+                                         side_blocks_rectangles        = covmat_coeffs_cross$covmat_without_rho    , idx_mat_side_block_rectangles = rho_idx[[j]]$cross[[i]]
+                                         )
+      )
+      
+    }
+    variation_cond_precision_chol = 
+    
+    #my_image(covmat_chol)
+    ### full_covmat = expand_full_covmat(
+    ###   covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = length(DAG$parents_previous_times[[i]])),
+    ###   covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])),
+    ###   side_blocks_rectangles  = 0*covmat_coeffs_cross$covmat
+    ### )
+    ### 1/sqrt(full_covmat[nrow(full_covmat), nrow(full_covmat)] - full_covmat[nrow(full_covmat), -nrow(full_covmat)]%*%solve(full_covmat[-nrow(full_covmat), -nrow(full_covmat)]) %*%full_covmat[nrow(full_covmat), -nrow(full_covmat)])
+    ### (solve(full_covmat[-nrow(full_covmat), -nrow(full_covmat)]) %*%full_covmat[nrow(full_covmat), -nrow(full_covmat)])/c(sqrt(full_covmat[nrow(full_covmat), nrow(full_covmat)] - full_covmat[nrow(full_covmat), -nrow(full_covmat)]%*%solve(full_covmat[-nrow(full_covmat), -nrow(full_covmat)]) %*%full_covmat[nrow(full_covmat), -nrow(full_covmat)]))
+    
+    #plot(res$coeffs[[i]], solve(covmat_chol)[1,])
+    # each row of solve covmat_chol factorizes the joint distribuion of children and parents
+    # top rows = involves children + parents 
+  }
+  
+  #Sys.time()-t1
+  res
+}
+
+
+
+
+
+##############
 
 Linv_coeffs = get_linv_coeffs(
   DAG = DAG, locs = locs, 
@@ -236,6 +369,7 @@ get_vecchia_blocks = function(DAG, coeffs, n_time)
   j = unlist(mapply(function(x, y)outer(x, rep(1, length(y))), same_time_indices, DAG$children))
   i = unlist(mapply(function(x, y)outer(rep(1, length(x)), y), same_time_indices, DAG$children))
   x = unlist(mapply(function(x, y)x[seq(nrow(x)-length(y)+1, nrow(x)),], coeffs, same_time_indices))# selecting bottom of  coeff matrices
+  tatato = unlist(mapply(function(x, y)x[-seq(nrow(x)-length(y)+1, nrow(x)),], coeffs, same_time_indices))# selecting bottom of  coeff matrices
   triangular_on_diag = Matrix::sparseMatrix(
     i = i[i>=j],
     j = j[i>=j],
@@ -260,9 +394,10 @@ get_vecchia_blocks = function(DAG, coeffs, n_time)
         Matrix::sparseMatrix(
         j = unlist(mapply(function(x, y)outer(x, rep(1, length(y))), DAG$parents_previous_times, DAG$children)), 
         i = unlist(mapply(function(x, y)outer(rep(1, length(x)), y), DAG$parents_previous_times, DAG$children)),
-        x = unlist(mapply(function(x, y)x[((idx-1)*length(y)+1):((idx)*length(y)),], coeffs, DAG$parents_previous_times, SIMPLIFY = F), recursive = T) 
+        x = unlist(mapply(function(x, y)x[seq((idx-1)*length(y)+1,(idx)*length(y)),], coeffs, DAG$parents_previous_times, SIMPLIFY = F), recursive = T) 
       )
       )
+  names(rectangular_below_diag)=sapply(seq(n_time-1), function(i)paste("lag=", n_time-i, sep=""))
   list(
     triangular_on_diag = triangular_on_diag,
     rectangular_below_diag = rectangular_below_diag
@@ -271,7 +406,6 @@ get_vecchia_blocks = function(DAG, coeffs, n_time)
 }  
 
 vecchia_blocks = get_vecchia_blocks(DAG, coeffs, n_time)  
-
 
 #vecchia_blocks$triangular_on_diag = t(solve(chol(GpGp::exponential_isotropic(c(1,1,0), locs))))
 #vecchia_blocks$rectangular_below_diag = lapply(vecchia_blocks$rectangular_below_diag, function(x)0*x)
@@ -321,21 +455,17 @@ vecchia_blocks_solve = function(x, vecchia_blocks, n_time)
   c(res)
 }
 
-#plot(x, 
-#vecchia_blocks_solve(vecchia_blocks_mult(x, vecchia_blocks, n_time), vecchia_blocks, n_time)
-#     )
-#
-#plot(vecchia_blocks_solve(x, vecchia_blocks, n_time))
+###plot(x, 
+###vecchia_blocks_solve(vecchia_blocks_mult(x, vecchia_blocks, n_time), vecchia_blocks, n_time)
+###     )
+###
+###plot(vecchia_blocks_solve(x, vecchia_blocks, n_time))
+
+
+
+x = rnorm(n_loc)
+Bidart::plot_pointillist_painting(locs, as.vector(Matrix::solve(vecchia_blocks$triangular_on_diag, x)))
 
 x = rnorm(100*n_loc)
-
 Bidart::plot_pointillist_painting(locs, vecchia_blocks_solve(x, vecchia_blocks, n_time)[seq(length(x)-n_loc+1, length(x))])
-
-
-
-#Bidart::plot_pointillist_painting(locs, as.vector(Matrix::solve(block_diag, rnorm(1000))))
-#
-#head(block_diag)
-
-
 

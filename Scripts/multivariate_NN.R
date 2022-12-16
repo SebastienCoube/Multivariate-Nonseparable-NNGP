@@ -179,7 +179,7 @@ find_unordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_othe
         if(tag!=i)if(m_other_vars==0){return(NULL)}else {return(NN_vec[1:(m_other_vars)])}
       },
       NNlists_quotas[[i]], 
-      var_tag
+      var_tag, SIMPLIFY = F
       )
   }
   ##loc_idx= 10

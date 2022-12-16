@@ -12,7 +12,7 @@ my_image = function(m)image(t(m)[,nrow(m):1])
 
 # generate test data
 set.seed(10)
-n_var = 1
+n_var = 2
 
 
 locs_1 = 10*cbind(runif(40), runif(40))
@@ -23,9 +23,9 @@ var_tag_2 = c(var_tag_1, 1+floor(n_var*runif(50)))
 rho = GpGp::exponential_isotropic(c(1, 1, 0), .1*matrix(rnorm(2*n_var), n_var))
 rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
 
-a2_vec = 100*runif(n_var)
+a2_vec = 1*runif(n_var)
 nu_vec = .5 + 2*runif(n_var)
-alpha = .0001 * runif(1)
+alpha = 1 * runif(1)
 a = runif(1) 
 b = runif(1) 
 cc = .1 * runif(1) 
@@ -214,7 +214,8 @@ GMA_compressed = function(
     multiplier, 
     effective_range,
     nu_, 
-    rho_vec_with_ones
+    rho_vec_with_ones, 
+    return_with_rho = F
 )
 {
   # size of spatial sets of interest
@@ -226,18 +227,29 @@ GMA_compressed = function(
   h[h==0] = min(h[h!=0])*.0001
   # creating matrices
   res = list()
-  res$covmat_without_rho = matrix(0, nrow(lower_tri_idx), n_lags)
+  if(return_with_rho)res$covmat_without_rho = matrix(0, nrow(lower_tri_idx), n_lags)
   res$covmat = matrix(0, nrow(lower_tri_idx), n_lags)
-  
-  # looping over time lags
-  for(i_lag in seq(n_lags)){
-    # index of position in the covariance matrix
-    # covariance without correlation
-    res$covmat_without_rho[,i_lag] = 
-      Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
-      multiplier[i_lag, var_idx]
-    # covariance
-    res$covmat[,i_lag] = res$covmat_without_rho[,i_lag] * rho_vec_with_ones[var_idx]
+  # index of position in the covariance matrix
+  if(return_with_rho)
+  {
+    # looping over time lags
+    for(i_lag in seq(n_lags)){
+      # covariance without correlation
+      res$covmat_without_rho[,i_lag] = 
+        Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
+        multiplier[i_lag, var_idx]
+      # covariance
+      res$covmat[,i_lag] = res$covmat_without_rho[,i_lag] * rho_vec_with_ones[var_idx]
+    }
+  }
+  if(!return_with_rho)
+  {
+    # looping over time lags
+    for(i_lag in seq(n_lags)){
+      # covariance
+      res$covmat[,i_lag] = Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
+        multiplier[i_lag, var_idx] * rho_vec_with_ones[var_idx]
+    }
   }
   res
 }
@@ -252,7 +264,8 @@ GMA_rectangular = function(
     effective_range,
     nu_, 
     rho_vec_with_ones, 
-    n_var
+    n_var, 
+    return_with_rho = F
 )
 {
   # size of spatial sets of interest
@@ -264,18 +277,28 @@ GMA_rectangular = function(
   h[h==0] = min(h[h!=0])*.0001
   # creating matrices
   res = list()
-  res$covmat_without_rho = array(0, c(dim(h), nrow(multiplier)))
+  if(return_with_rho) res$covmat_without_rho = array(0, c(dim(h), nrow(multiplier)))
   res$covmat = array(0, c(dim(h), nrow(multiplier)))
   
-  # looping over time lags
-  for(i_lag in seq(n_lags)){
-    # index of position in the covariance matrix
-    # covariance without correlation
-    res$covmat_without_rho[,,n_lags-i_lag+1] = 
-      Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
-      multiplier[i_lag, var_idx]
-    # covariance
-    res$covmat[,,n_lags-i_lag+1] = res$covmat_without_rho[,,n_lags-i_lag+1] * rho_vec_with_ones[var_idx]
+  if(return_with_rho){
+    # looping over time lags
+    for(i_lag in seq(n_lags)){
+      # index of position in the covariance matrix
+      # covariance without correlation
+      res$covmat_without_rho[,,n_lags-i_lag+1] = 
+        Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
+        multiplier[i_lag, var_idx]
+      # covariance
+      res$covmat[,,n_lags-i_lag+1] = res$covmat_without_rho[,,n_lags-i_lag+1] * rho_vec_with_ones[var_idx]
+    }
+  }
+  if(!return_with_rho){
+    # looping over time lags
+    for(i_lag in seq(n_lags)){
+      # covariance
+      res$covmat[,,n_lags-i_lag+1] = Matern(h, r = effective_range[i_lag,var_idx], nu_ = nu_[var_idx]) * 
+        multiplier[i_lag, var_idx] * rho_vec_with_ones[var_idx]
+    }
   }
   res
 }
@@ -372,7 +395,7 @@ full_covmat = expand_full_covmat(covmat_previous_periods = expand_block_toeplitz
                                  side_blocks_rectangles  = covmat_coeffs_12$covmat
                                  )
 chol(full_covmat)
-my_image(full_covmat)
+my_image(log(.5+full_covmat))
 
 multiply_vector_block_toeplitz_sparse = function(v, covmat_coeffs, n_loc, idx_mat)
 {
@@ -389,51 +412,52 @@ multiply_vector_block_toeplitz_sparse = function(v, covmat_coeffs, n_loc, idx_ma
 }
 
 
-### sparse multiplication for upper right blocks
-##v =  rnorm(180)
-##idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=0
-##idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
-##
-##Multiply_vector_side_blocks_upper_right(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
-##  (covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(90)]-
-##  (covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(91, 180)]
-##
-### sparse multiplication for left vertical blocks
-##v =  rnorm(40)
-##
-##Multiply_vector_side_blocks_vertical_left(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
-##  c(as.vector(Matrix::t(covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v),
-##    as.vector(Matrix::t(covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v))
-##
+# sparse multiplication for upper right blocks
+v =  rnorm(180)
+idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=0
+idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
+
+Multiply_vector_side_blocks_upper_right(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
+  (covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(90)]-
+  (covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(91, 180)]
+
+# sparse multiplication for left vertical blocks
+v =  rnorm(40)
+
+Multiply_vector_side_blocks_vertical_left(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
+  c(as.vector(Matrix::t(covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v),
+    as.vector(Matrix::t(covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v))
 
 
-###multiply_vector_full_covmat_sparse = function(
-###    v, 
-###    covmat_coeffs_current_period,  n_loc_current_period,  idx_mat_current_period, 
-###    covmat_coeffs_previous_period, n_loc_previous_period, idx_mat_previous_period, 
-###    side_blocks_rectangles, idx_mat_side_block_rectangles
-###)
-###{
-###  res = matrix(0, length(v), 1)
-###  res[-seq(n_loc_current_period)] = multiply_vector_block_toeplitz_sparse(
-###    v = v[-seq(n_loc_current_period)], 
-###    covmat_coeffs = covmat_coeffs_previous_period, 
-###    n_loc = n_loc_previous_period, 
-###    idx_mat = idx_mat_previous_period
-###  )
-###  res[-seq(n_loc_current_period)] = res[-seq(n_loc_current_period)] + 
-###    Multiply_vector_side_blocks_vertical_left(v = v[seq(n_loc_current_period)], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
-###  res[seq(n_loc_current_period)] = multiply_vector_block_toeplitz_sparse(
-###    v = v[seq(n_loc_current_period)], 
-###    covmat_coeffs = covmat_coeffs_current_period, 
-###    n_loc = n_loc_current_period, 
-###    idx_mat = idx_mat_current_period
-###  )
-###  res[seq(n_loc_current_period)] = res[seq(n_loc_current_period)] + 
-###    Multiply_vector_side_blocks_upper_right(v = v[-seq(n_loc_current_period)], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
-###  res
-###}
-###
+
+multiply_vector_full_covmat_sparse = function(
+    v, 
+    covmat_coeffs_current_period,  n_loc_current_period,  idx_mat_current_period, 
+    covmat_coeffs_previous_period, n_loc_previous_period, idx_mat_previous_period, 
+    side_blocks_rectangles, idx_mat_side_block_rectangles
+)
+{
+  res = matrix(0, length(v), 1)
+  idx = seq(length(v)-n_loc_current_period+1, length(v))
+  res[-idx] = multiply_vector_block_toeplitz_sparse(
+    v = v[-idx], 
+    covmat_coeffs = covmat_coeffs_previous_period, 
+    n_loc = n_loc_previous_period, 
+    idx_mat = idx_mat_previous_period
+  )
+  res[-idx] = res[-idx] + 
+    Multiply_vector_side_blocks_vertical_left(v = v[idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
+  res[idx] = multiply_vector_block_toeplitz_sparse(
+    v = v[idx], 
+    covmat_coeffs = covmat_coeffs_current_period, 
+    n_loc = n_loc_current_period, 
+    idx_mat = idx_mat_current_period
+  )
+  res[idx] = res[idx] + 
+    Multiply_vector_side_blocks_upper_right(v = v[-idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
+  res
+}
+
 ###idx_mat_current_period  = get_lower_tri_idx(40, T) 
 ###idx_mat_previous_period = get_lower_tri_idx(90, T)
 ###
@@ -462,7 +486,10 @@ covmat_coeffs_1  =   GMA_compressed(
   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
 )
 
+covmat = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = get_lower_tri_idx(nrow(locs_1), T), n_loc = nrow(locs_1))
 Bidart::plot_pointillist_painting(
   locs_1, 
-  t(chol(expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = get_lower_tri_idx(nrow(locs_1), T), n_loc = nrow(locs_1))))%*% rnorm(nrow(locs_1))
+  t(chol(covmat))%*% rnorm(nrow(locs_1))
 )
+diag(backsolve(t(chol(covmat)), t(chol(covmat))))
+
