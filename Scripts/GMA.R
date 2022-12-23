@@ -443,7 +443,7 @@ multiply_vector_full_covmat_sparse = function(
     v = v[-idx], 
     covmat_coeffs = covmat_coeffs_previous_period, 
     n_loc = n_loc_previous_period, 
-    idx_mat = idx_mat_previous_period
+    idx_mat = get_lower_tri_idx(n_loc_previous_period, T)#idx_mat_previous_period
   )
   res[-idx] = res[-idx] + 
     Multiply_vector_side_blocks_vertical_left(v = v[idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
@@ -451,7 +451,7 @@ multiply_vector_full_covmat_sparse = function(
     v = v[idx], 
     covmat_coeffs = covmat_coeffs_current_period, 
     n_loc = n_loc_current_period, 
-    idx_mat = idx_mat_current_period
+    idx_mat = get_lower_tri_idx(n_loc_current_period, T)#idx_mat_current_period
   )
   res[idx] = res[idx] + 
     Multiply_vector_side_blocks_upper_right(v = v[-idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
