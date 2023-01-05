@@ -3,8 +3,6 @@
 #source("Scripts/grouping.R")
 #source("Scripts/multivariate_NN.R")
 
-# Problem with rho idx !!!
-
 # flip image function to match matrix
 my_image = function(m)image(t(m)[,nrow(m):1])
 
@@ -25,7 +23,6 @@ var_tag = ceiling(n_var*runif(n_loc));var_tag = match(var_tag, unique(var_tag))
 
 # covariance params
 rho = GpGp::exponential_isotropic(c(1, 1, 0), .1*matrix(rnorm(2*n_var), n_var))
-rho[]=1
 rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
 a2_vec = rep(100, n_var)#.000001*runif(n_var)
 nu_vec = rep(1.5, n_var)#.5 + 2*runif(n_var)
@@ -71,7 +68,6 @@ get_lower_tri_idx_DAG = function(DAG)
 lower_tri_idx_DAG = get_lower_tri_idx_DAG(DAG)
 
 # get var idx in lower tri mat
-
 get_var_idx = function(DAG, var_tag)
 {
   n_var = max(var_tag)
@@ -99,30 +95,42 @@ var_idx = get_var_idx(DAG, var_tag = var_tag)
 
 get_rho_idx = function(DAG, var_idx, lower_tri_idx_DAG, n_var)
 {
-  lower_tri_idx_DAG = c(lower_tri_idx_DAG, 
-                        list(mapply(
-                          function(x, y)cbind(rep(seq(length(x)), each = length(y)), rep(seq(length(y)), length(x))),
-                          mapply(c, DAG$parents_same_time, DAG$children), 
-                          DAG$parents_previous_times,
-                          SIMPLIFY = F
-                        ))
-                        )
-  res = lapply(seq(n_var*(n_var+1)/2)[-cumsum(c(1, seq(n_var, 2)))], 
-         function(i)  mapply(
-           function(lower_tri_idx_DAG_at_time, var_idx_at_time)
-             mapply(function(x, y)x[y==i,], 
-                    lower_tri_idx_DAG_at_time, var_idx_at_time, SIMPLIFY = F),
-           lower_tri_idx_DAG,
-           var_idx, 
-           SIMPLIFY = F
-         )
-        )  
-  for(i in seq(length(res))) names(res[[i]]) = c("current_time", "previous_times", "cross")
+  # adding rectangular indices to lower tri indices
+  indices = 
+    c(lower_tri_idx_DAG, 
+      "cross" = list(mapply(
+        function(x, y)as.matrix(expand.grid(seq(length(x)), seq(length(y)))),
+        mapply(c, DAG$parents_same_time, DAG$children), 
+        DAG$parents_previous_times,
+        SIMPLIFY = F
+      ))
+    )
+  # get combination idx of the variable pairs in the indices arrays
+##  combination_idx = 
+##    lapply(indices, function(idx_list)
+##      lapply(idx_list, function(idx_array)
+##        position_in_lower_tri(var_tag[idx_array[,1]], var_tag[idx_array[,2]], n_var)
+##      )
+##    )
+  res = lapply(seq(n_var*(n_var+1)/2)[-cumsum(c(1, seq(n_var, 2)))], # indices of rho after diagonal terms are removed
+               function(i)
+                 mapply(indices, var_idx, FUN = function(list1, list2)
+                   mapply(list1, list2, FUN = function(idx_array, var_combination_idx)idx_array[var_combination_idx==i,,drop=F], SIMPLIFY = F), 
+                   SIMPLIFY = F
+                   )
+  )
+  names(res)=paste("rho", seq(n_var*(n_var+1)/2)[-cumsum(c(1, seq(n_var, 2)))], sep = "_")
   res
 }
 
-
 rho_idx = get_rho_idx(DAG = DAG, var_idx = var_idx, lower_tri_idx_DAG = lower_tri_idx_DAG, n_var = n_var)
+
+#### # Check that the right indices are selected by rho_idx
+####plot(indices$cross[[100]], col = var_idx$cross[[100]])
+####points(rho_idx$rho_2$cross[[100]], pch = 3)
+####
+####plot(indices$same_time[[100]], col = var_idx$current_time[[100]])
+####points(rho_idx$rho_2$same_time[[100]], pch = 3)
 
 # Pre-computing range and multiplier
 multiplier = get_multiplier(
@@ -239,6 +247,8 @@ get_sigma_12 = function(
   res
 }
 
+x_plus_tx = function(x)x+t(x)
+
 i=10
 get_linv_coeffs_and_derivative = function(
     locs, var_tag, 
@@ -262,7 +272,7 @@ get_linv_coeffs_and_derivative = function(
     n_children = length(DAG$children[[i]])
     n_loc_same_time = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]])
     n_loc_previous = length(DAG$parents_previous_times[[i]])
-    # computing stuff
+    # computing covmat coefficients
     covmat_coeffs_same_time = GMA_compressed(
       locs = locs[c(DAG$parents_same_time[[i]], DAG$children[[i]]),, drop = F],
       lower_tri_idx = lower_tri_idx_DAG$same_time[[i]],
@@ -299,86 +309,139 @@ get_linv_coeffs_and_derivative = function(
     #   side_blocks_rectangles  = covmat_coeffs_cross$covmat
     # ))
     # computing Cholesky decomposition of covmat
-    covmat_chol = chol(expand_full_covmat(
+    covmat = expand_full_covmat(
       covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_previous$covmat,  block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc = n_loc_previous),
       covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_same_time$covmat, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc = n_loc_same_time),
       side_blocks_rectangles  = covmat_coeffs_cross$covmat
-    ))
-    # computing covmat coeffs
+    )
+    covmat_chol = chol(covmat)
+    Sigma_12 = covmat[,seq(nrow(covmat)-n_children+1,nrow(covmat)), drop = F]
+    Sigma_12[(nrow(Sigma_12)-n_children+1):nrow(Sigma_12),]=0
+    # computing covmat coefficients
     M = matrix(0, nrow(covmat_chol), length(DAG$children[[i]]))
     M[cbind(seq(nrow(covmat_chol)- length(DAG$children[[i]])+1, nrow(covmat_chol)), seq(length(DAG$children[[i]])))]=1
     res$coeffs[[i]] = backsolve(
       r =  covmat_chol, 
       M
     )
+    # precision of the children knowing the parents
     cond_precision_chol = t(res$coeffs[[i]][-seq(nrow(res$coeffs[[i]])-n_children),])
-    # covmat between children and the parents
-    Sigma_12 = get_sigma_12(
-      coeffs_same_time = covmat_coeffs_same_time$covmat, 
-      block_lower_tri_idx_same_time = lower_tri_idx_DAG$same_time   [[i]], 
-      n_loc_same_time = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]]), 
-      coeffs_cross = covmat_coeffs_cross$covmat, 
-      n_children = length(DAG$children[[i]])
+    # solve(Sigma_1_1) Sigma 12, called "salt" because it goes everywhere
+    salt = backsolve(
+      (covmat_chol), transpose = T,
+      Sigma_12
     )
-    Sigma_12[(nrow(Sigma_12)-n_children+1):nrow(Sigma_12),]=0
-    Sigma_12_without_rho = get_sigma_12(
-      coeffs_same_time = covmat_coeffs_same_time$covmat_without_rho, 
-      block_lower_tri_idx_same_time = lower_tri_idx_DAG$same_time   [[i]], 
-      n_loc_same_time = length(DAG$children[[i]])+length(DAG$parents_same_time[[i]]), 
-      coeffs_cross = covmat_coeffs_cross$covmat_without_rho, 
-      n_children = length(DAG$children[[i]])
-    )
-    Sigma_12_without_rho[(nrow(Sigma_12_without_rho)-n_children+1):nrow(Sigma_12),]=0
-    # solve(Sigma_1_1) Sigma 12
+    salt[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
     salt = 
       backsolve(
-        (covmat_chol),
-        backsolve(
-          (covmat_chol), transpose = T,
-          Sigma_12
-        )
+        (covmat_chol), salt
       )
     salt[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
     # looping on rho
     for(j in seq(length(rho_idx)))
     {
-      The indices of rho_idx are not good and the coefficients of covmat_without_rho are set to 1
-      # (d Sigma 11 / d rho) *  solve(Sigma 11) Sigma 12
-      derivative_cond_mean_multiplicator = apply(
+      # solve(Sigma 11) (d Sigma 11 / d rho) *  solve(Sigma 11) Sigma 12 ########
+      spam_sandwich = apply(
         salt, 
         2, 
         function(x)multiply_vector_full_covmat_sparse(
-          v = #x
-          rep(1, nrow(salt)),
-          covmat_coeffs_current_period = covmat_coeffs_same_time$covmat_without_rho/covmat_coeffs_same_time$covmat_without_rho, 
-          idx_mat_current_period = rho_idx[[j]]$current_time[[i]], 
+          v = x,
+          covmat_coeffs_current_period = covmat_coeffs_same_time$covmat_without_rho, 
+          idx_mat_current_period = rho_idx[[j]]$same_time[[i]], 
           n_loc_current_period = n_loc_same_time, 
-          covmat_coeffs_previous_period = covmat_coeffs_previous$covmat_without_rho/covmat_coeffs_previous$covmat_without_rho, 
+          covmat_coeffs_previous_period = covmat_coeffs_previous$covmat_without_rho, 
           n_loc_previous_period = n_loc_previous, 
           idx_mat_previous_period = rho_idx[[j]]$previous_times[[i]], 
-          side_blocks_rectangles = covmat_coeffs_cross$covmat_without_rho/covmat_coeffs_cross$covmat_without_rho, 
+          side_blocks_rectangles = covmat_coeffs_cross$covmat_without_rho, 
           idx_mat_side_block_rectangles = rho_idx[[j]]$cross[[i]]
         )
       )
-      
-      var_tag_i = c(rep(var_tag[DAG$parents_previous_times[[i]]], n_time-1),var_tag[DAG$parents_same_time[[i]]], var_tag[DAG$children[[i]]])
-      covmat_without_rho = expand_full_covmat(
-        covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs_previous$covmat_without_rho , block_lower_tri_idx = lower_tri_idx_DAG$previous_times[[i]], n_loc_previous), 
-        covmat_current_period =   expand_block_toeplitz_covmat(covmat_coeffs_same_time$covmat_without_rho, block_lower_tri_idx = lower_tri_idx_DAG$same_time     [[i]], n_loc_same_time), 
-        side_blocks_rectangles = covmat_coeffs_cross$covmat_without_rho
+      spam_sandwich[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
+      spam_sandwich =backsolve(
+        (covmat_chol), transpose = T, spam_sandwich
       )
-      #derivative_cond_mean_multiplicator - 
-      #(
-      #  diag(1*(var_tag_i==1)) %*% covmat_without_rho %*% diag(1*(var_tag_i==2)) + 
-      #  diag(1*(var_tag_i==2)) %*% covmat_without_rho %*% diag(1*(var_tag_i==1))
-      #) %*% salt
-      derivative_cond_mean_multiplicator - 
-      (
-        diag(1*(var_tag_i==1)) %*% (covmat_without_rho/covmat_without_rho) %*% diag(1*(var_tag_i==2)) + 
-        diag(1*(var_tag_i==2)) %*% (covmat_without_rho/covmat_without_rho) %*% diag(1*(var_tag_i==1))
-      ) %*% rep(1, nrow(salt))
+      spam_sandwich[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
+      spam_sandwich = 
+        backsolve(
+        (covmat_chol),spam_sandwich
+        )
+      spam_sandwich[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
+      
+      # - solve(Sigma 11) d Sigma 12 / d rho #########
+      pickle = 
+        # (d Sigma 12 / d rho) is here
+        apply(
+          M, 
+          2, 
+          function(x)multiply_vector_full_covmat_sparse(
+            v = x,
+            covmat_coeffs_current_period = covmat_coeffs_same_time$covmat_without_rho, 
+            idx_mat_current_period = rho_idx[[j]]$same_time[[i]], 
+            n_loc_current_period = n_loc_same_time, 
+            covmat_coeffs_previous_period = NULL, 
+            n_loc_previous_period = n_loc_previous, 
+            idx_mat_previous_period = NULL, 
+            side_blocks_rectangles = covmat_coeffs_cross$covmat_without_rho, 
+            idx_mat_side_block_rectangles = rho_idx[[j]]$cross[[i]]
+          )
+        )
+      pickle[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
+      pickle=
+          backsolve(
+            (covmat_chol), transpose = T,
+            pickle
+          )
+      pickle[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
+      pickle = 
+        backsolve(
+          (covmat_chol), pickle
+          )
+      pickle[seq(nrow(salt)-n_children+1, nrow(salt)),]=0
+      ####### derivative of the conitional variance multiplicator ########
+      # d(solve(chol(Sigma 22  - Sigma 12 solve(Sigma 11) Sigma 21))) / d rho = 
+      # (solve(chol(Sigma 22  - Sigma 12 solve(Sigma 11) Sigma 21 + 
+      # eps * d(Sigma 22  - Sigma 12 Sigma 11 Sigma 21) / d rho ))) - 
+      # solve(chol(Sigma 22  - Sigma 12 Sigma 11 Sigma 21))) / eps 
+      derivative_cond_precision_chol = 10000 *
+        (
+          t(solve(chol(
+            tcrossprod(solve(cond_precision_chol))  # Sigma 22  - Sigma 12 solve(Sigma 11) Sigma 21
+            + .0001 * 
+              apply( # d Sigma 22  / d rho
+                M, 
+                2, 
+                function(x)multiply_vector_full_covmat_sparse(
+                  v = x,
+                  covmat_coeffs_current_period = covmat_coeffs_same_time$covmat_without_rho, 
+                  idx_mat_current_period = rho_idx[[j]]$same_time[[i]], 
+                  n_loc_current_period = n_loc_same_time, 
+                  covmat_coeffs_previous_period = NULL, 
+                  idx_mat_previous_period = NULL, 
+                  idx_mat_side_block_rectangles = NULL
+                )
+              )[seq(nrow(M)-ncol(M)+1, nrow(M)),]
+            - .0001 * x_plus_tx(crossprod(pickle, Sigma_12))# d Sigma 12 / d rho solve(Sigma 11) Sigma 12 + Sigma 12 solve(Sigma 11) d Sigma 12 / d rho
+            + .0001 * crossprod(spam_sandwich, Sigma_12) # Sigma 12 d Sigma 11/ d rho  Sigma 12
+          )))- 
+            cond_precision_chol
+        )
+      
+      ###### putting stuff together ######
+      # d(solve(chol(cond var)))
+      res$coeffs_derivatives[[j]][[i]] = - salt 
+      # adding diag at the bottom
+      res$coeffs_derivatives[[j]][[i]][
+        cbind(
+        seq(nrow(pickle)-ncol(pickle)+1, nrow(pickle)), 
+        seq(ncol(pickle))
+        )]  =1
+      # multiplying by conditional variance cholesky derivative
+      res$coeffs_derivatives[[j]][[i]] = res$coeffs_derivatives[[j]][[i]] %*% t(derivative_cond_precision_chol)
+      # adding derivative of conditional mean multiplicator
+      res$coeffs_derivatives[[j]][[i]] = res$coeffs_derivatives[[j]][[i]] + (spam_sandwich - pickle) %*% t(cond_precision_chol)
+        ####################
     }
-    variation_cond_precision_chol = 
+    
     
     #my_image(covmat_chol)
     ### full_covmat = expand_full_covmat(
@@ -399,8 +462,25 @@ get_linv_coeffs_and_derivative = function(
 }
 
 
+tatato = get_linv_coeffs_and_derivative(
+  DAG = DAG, locs = locs, 
+  lower_tri_idx_DAG = lower_tri_idx_DAG, 
+  var_idx = var_idx, 
+  var_tag = var_tag, 
+  multiplier = multiplier, 
+  effective_range = effective_range, 
+  rho_vec = rho_vec, rho_idx = rho_idx)
+tatata = get_linv_coeffs_and_derivative(
+  DAG = DAG, locs = locs, 
+  lower_tri_idx_DAG = lower_tri_idx_DAG, 
+  var_idx = var_idx, 
+  var_tag = var_tag, 
+  multiplier = multiplier, 
+  effective_range = effective_range, 
+  rho_vec = rho_vec+.0001, rho_idx = rho_idx)
 
-
+((tatata$coeffs[[10]] - tatato$coeffs[[10]])*10000)/
+(tatato$coeffs_derivatives[[1]][[10]])
 
 ##############
 

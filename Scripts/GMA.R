@@ -439,21 +439,21 @@ multiply_vector_full_covmat_sparse = function(
 {
   res = matrix(0, length(v), 1)
   idx = seq(length(v)-n_loc_current_period+1, length(v))
-  res[-idx] = multiply_vector_block_toeplitz_sparse(
+  if(!is.null(covmat_coeffs_previous_period))res[-idx] = multiply_vector_block_toeplitz_sparse(
     v = v[-idx], 
     covmat_coeffs = covmat_coeffs_previous_period, 
     n_loc = n_loc_previous_period, 
     idx_mat = idx_mat_previous_period
   )
-  res[-idx] = res[-idx] + 
+  if(!is.null(idx_mat_side_block_rectangles))res[-idx] = res[-idx] + 
     Multiply_vector_side_blocks_vertical_left(v = v[idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
-  res[idx] = multiply_vector_block_toeplitz_sparse(
+  if(!is.null(idx_mat_current_period))res[idx] = multiply_vector_block_toeplitz_sparse(
     v = v[idx], 
     covmat_coeffs = covmat_coeffs_current_period, 
     n_loc = n_loc_current_period, 
     idx_mat = idx_mat_current_period
   )
-  res[idx] = res[idx] + 
+  if(!is.null(idx_mat_side_block_rectangles))res[idx] = res[idx] + 
     Multiply_vector_side_blocks_upper_right(v = v[-idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
   res
 }
