@@ -67,7 +67,7 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
   locs <- locs + matrix( ee*1e-4*stats::rnorm(n*ncol(locs)), n, ncol(locs) ) 
   
   # number of available parents of each variable
-  number_available_parents_by_var = apply(sapply(unique(var_tag), function(tag)var_tag == tag), 2, function(x) (cumsum(x)-1))
+  number_available_parents_by_var = apply(sapply(unique(var_tag), function(tag)var_tag == tag), 2, function(x) (cumsum(c(0, x[-length(x)]))))
   number_available_parents_by_var = pmax(number_available_parents_by_var, 0)
 
   # first search for quotas NNs
@@ -97,7 +97,7 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
       data_inds <-  which(var_tag[1:max(query_inds)]==i)# restrict data to all indices of the variable coming before last query
       msearch <- min(length(data_inds), 2*msearch)# increase search depht
       NN <- FNN::get.knnx( locs[data_inds,,drop=FALSE], locs[query_inds,,drop=FALSE], msearch )$nn.index # get NNs
-      NN <- apply(NN, 2, function(x)data_inds[x])
+      NN <- matrix(apply(NN, 2, function(x)data_inds[x]), ncol = ncol(NN))
       # forbidding points of variable i to take themselves as parents
       NN[which(var_tag[query_inds]==i),1] = n+1
       less_than_k <- t(sapply( 1:nrow(NN), function(k) NN[k,] <= query_inds[k]  ))# get only NNs coming before
