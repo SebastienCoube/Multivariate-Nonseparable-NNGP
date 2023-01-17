@@ -817,6 +817,8 @@ x - vecchia_blocks_mult(vecchia_blocks_solve(x, vecchia_blocks, n_time), vecchia
 
 
 
+vecchia_blocks_solve(x, vecchia_blocks, n_time)
+
 
 
 w = rnorm(20*n_loc)
