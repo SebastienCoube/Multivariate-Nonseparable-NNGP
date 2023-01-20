@@ -2,35 +2,32 @@
 # Generate data #
 #################
 
-Rcpp::sourceCpp("Scripts/multiply.cpp")
-
-# flip image function to match matrix
-my_image = function(m)image(t(m)[,nrow(m):1])
-
-# generate test data
-set.seed(10)
-n_var = 2
-
-
-locs_1 = 10*cbind(runif(40), runif(40))
-locs_2 = rbind(locs_1, 10*cbind(runif(50), runif(50)))
-var_tag_1 = 1+floor(n_var*runif(40))
-var_tag_2 = c(var_tag_1, 1+floor(n_var*runif(50)))
-
-rho = GpGp::exponential_isotropic(c(1, 1, 0), .1*matrix(rnorm(2*n_var), n_var))
-rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
-
-a2_vec = 1*runif(n_var)
-nu_vec = .5 + 2*runif(n_var)
-alpha = 1 * runif(1)
-a = runif(1) 
-b = runif(1) 
-cc = .1 * runif(1) 
-lambda = runif(1) 
-delta = runif(1) 
-r = .1 * runif(1) 
-A_vec = runif(n_var)
-u = seq(0, 5)
+#### # flip image function to match matrix
+#### my_image = function(m)image(t(m)[,nrow(m):1])
+#### 
+#### # generate test data
+#### set.seed(10)
+#### n_var = 2
+#### 
+#### locs_1 = 10*cbind(runif(40), runif(40))
+#### locs_2 = rbind(locs_1, 10*cbind(runif(50), runif(50)))
+#### var_tag_1 = 1+floor(n_var*runif(40))
+#### var_tag_2 = c(var_tag_1, 1+floor(n_var*runif(50)))
+#### 
+#### rho = GpGp::exponential_isotropic(c(1, 1, 0), .1*matrix(rnorm(2*n_var), n_var))
+#### rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
+#### 
+#### a2_vec = 1*runif(n_var)
+#### nu_vec = .5 + 2*runif(n_var)
+#### alpha = 1 * runif(1)
+#### a = runif(1) 
+#### b = runif(1) 
+#### cc = .1 * runif(1) 
+#### lambda = runif(1) 
+#### delta = runif(1) 
+#### r = .1 * runif(1) 
+#### A_vec = runif(n_var)
+#### u = seq(0, 5)
 
 
 ######################################
@@ -97,10 +94,10 @@ Matern = function(h, r, nu_)(r * h)^nu_ * besselK(r * h, nu_)
 # Some functions to work with symmetric matrices #
 ##################################################
 
-diag_indices_lower_tri = function(n)cumsum(c(1,seq(n, 2)))
-diag_indices_lower_tri(3)
-diag_indices_lower_tri(4)
-diag_indices_lower_tri(5)
+#### diag_indices_lower_tri = function(n)cumsum(c(1,seq(n, 2)))
+#### diag_indices_lower_tri(3)
+#### diag_indices_lower_tri(4)
+#### diag_indices_lower_tri(5)
 
 # given integer n_loc, gives 2-column matrix of lower triangular indices 
 # in the square matrix n_loc*n_loc WITHOUT diagonal as in dist(,diag = F)
@@ -140,7 +137,7 @@ get_lower_tri_idx = function(n_loc, diag = F)
     )
   }
 }
-get_lower_tri_idx(10)
+#### get_lower_tri_idx(10)
 
 # given three integers i, j, n_loc, gives the position of coefficient (i, j)
 # in the n_loc*n_loc square matrix in the lower triangular coefficients
@@ -159,10 +156,10 @@ position_in_lower_tri = function(i, j, n_loc)
   a = pmin(i, j); b = pmax(i, j)
   (a-1)*(n_loc-a+1) + (a-1)*a/2 + b-a+1
 }
-#  i = 1;j =3;n_loc=3;position_in_lower_tri(i, j, n_loc)
-#  i = 2;j =1;n_loc=3;position_in_lower_tri(i, j, n_loc)
-#  i = 2;j =3;n_loc=3;position_in_lower_tri(i, j, n_loc)
-#  i = 3;j =3;n_loc=3;position_in_lower_tri(i, j, n_loc)
+####  i = 1;j =3;n_loc=3;position_in_lower_tri(i, j, n_loc)
+####  i = 2;j =1;n_loc=3;position_in_lower_tri(i, j, n_loc)
+####  i = 2;j =3;n_loc=3;position_in_lower_tri(i, j, n_loc)
+####  i = 3;j =3;n_loc=3;position_in_lower_tri(i, j, n_loc)
 
 
 # given a vector of integers i_vec and an integer n_var, 
@@ -176,14 +173,13 @@ position_in_lower_tri_cross_vec = function(i_vec, n_var, diag = F)
   position_in_lower_tri(i_vec[idx[,1]], i_vec[idx[,2]], n_var)
 }
 
-##  i_vec = 1 + floor(n_var*runif(10))
-##  position_in_lower_tri_cross_vec(i_vec, n_var)
-##  length(position_in_lower_tri_cross_vec(i_vec, n_var))
-##  
-##  i_vec = 1 + floor(n_var*runif(10))
-##  position_in_lower_tri_cross_vec(i_vec, n_var)
-##  length(position_in_lower_tri_cross_vec(i_vec,n_var))
-
+####  i_vec = 1 + floor(n_var*runif(10))
+####  position_in_lower_tri_cross_vec(i_vec, n_var)
+####  length(position_in_lower_tri_cross_vec(i_vec, n_var))
+####  
+####  i_vec = 1 + floor(n_var*runif(10))
+####  position_in_lower_tri_cross_vec(i_vec, n_var)
+####  length(position_in_lower_tri_cross_vec(i_vec,n_var))
 
 put_ones_in_rho_vec = function(rho_vec)
 {
@@ -197,16 +193,15 @@ put_ones_in_rho_vec = function(rho_vec)
 # getting GMA covmat #
 ######################
 
-# Toy example  
-multiplier = get_multiplier(
-  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
-  r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, u = u
-)
-effective_range = get_effective_range(
-  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
-  r = r, A_vec = A_vec, a2_vec = a2_vec, u = u
-)
-
+#### # Toy example  
+#### multiplier = get_multiplier(
+####   a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+####   r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, u = u
+#### )
+#### effective_range = get_effective_range(
+####   a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+####   r = r, A_vec = A_vec, a2_vec = a2_vec, u = u
+#### )
 
 # compute unique elements of GMA covmat
 GMA_compressed = function(
@@ -255,8 +250,6 @@ GMA_compressed = function(
   }
   res
 }
-
-#position_in_lower_tri_cross_vec(var_tag, n_var, diag = T)
 
 # elements of rectangular GMA matrix
 GMA_rectangular = function(
@@ -308,40 +301,39 @@ GMA_rectangular = function(
 
 expand_nu = function(nu_vec){nu_ = outer(nu_vec, nu_vec, "+") ; nu_ = nu_/2; nu_ = nu_[lower.tri(nu_, T)];nu_}
 
-# carry on with toy example
-
-covmat_coeffs_1  =   GMA_compressed(
-  locs = locs_1, 
-  lower_tri_idx = get_lower_tri_idx(nrow(locs_1), diag = T),
-  var_idx = position_in_lower_tri_cross_vec(var_tag_1, n_var, diag = T),
-  multiplier = multiplier[1,,drop=FALSE], 
-  effective_range = effective_range,
-  nu_ = expand_nu(nu_vec),
-  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
-)
-covmat_coeffs_2  =   GMA_compressed(
-  locs = locs_2, 
-  lower_tri_idx = get_lower_tri_idx(nrow(locs_2), diag = T),
-  var_idx = position_in_lower_tri_cross_vec(var_tag_2, n_var, diag = T),
-  multiplier = multiplier[-nrow(multiplier),,drop=FALSE], 
-  effective_range = effective_range,
-  nu_ = expand_nu(nu_vec),
-  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
-)
-
-
-tatato = expand.grid(var_tag_1, var_tag_2)
-var_idx_12 = position_in_lower_tri(tatato[,1], tatato[,2], n_var)
-covmat_coeffs_12  =   GMA_rectangular(
-  locs_1 = locs_1, 
-  locs_2 = locs_2, 
-  var_idx = var_idx_12,
-  multiplier = multiplier[-1,,drop=FALSE], 
-  effective_range = effective_range[-1,,drop=FALSE],
-  nu_ = expand_nu(nu_vec),
-  n_var =  n_var, 
-  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
-)
+#### # carry on with toy example
+#### covmat_coeffs_1  =   GMA_compressed(
+####   locs = locs_1, 
+####   lower_tri_idx = get_lower_tri_idx(nrow(locs_1), diag = T),
+####   var_idx = position_in_lower_tri_cross_vec(var_tag_1, n_var, diag = T),
+####   multiplier = multiplier[1,,drop=FALSE], 
+####   effective_range = effective_range,
+####   nu_ = expand_nu(nu_vec),
+####   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
+#### )
+#### covmat_coeffs_2  =   GMA_compressed(
+####   locs = locs_2, 
+####   lower_tri_idx = get_lower_tri_idx(nrow(locs_2), diag = T),
+####   var_idx = position_in_lower_tri_cross_vec(var_tag_2, n_var, diag = T),
+####   multiplier = multiplier[-nrow(multiplier),,drop=FALSE], 
+####   effective_range = effective_range,
+####   nu_ = expand_nu(nu_vec),
+####   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
+#### )
+#### 
+#### 
+#### tatato = expand.grid(var_tag_1, var_tag_2)
+#### var_idx_12 = position_in_lower_tri(tatato[,1], tatato[,2], n_var)
+#### covmat_coeffs_12  =   GMA_rectangular(
+####   locs_1 = locs_1, 
+####   locs_2 = locs_2, 
+####   var_idx = var_idx_12,
+####   multiplier = multiplier[-1,,drop=FALSE], 
+####   effective_range = effective_range[-1,,drop=FALSE],
+####   nu_ = expand_nu(nu_vec),
+####   n_var =  n_var, 
+####   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
+#### )
 
 # block_lower_tri_idx = get_lower_tri_idx(n_loc, T)
 
@@ -375,9 +367,9 @@ expand_block_toeplitz_covmat = function(covmat_coeffs, block_lower_tri_idx, n_lo
   res
 }
 
-covmat_previous_periods = (expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, n_loc = 90, block_lower_tri_idx = get_lower_tri_idx(90, T)))
-covmat_current_period = expand_covmat_into_blocks(covmat_coeffs = covmat_coeffs_1$covmat, n_loc = 40, block_lower_tri_idx = get_lower_tri_idx(40, T))[[1]]
-side_blocks_rectangles = covmat_coeffs_12$covmat
+#### covmat_previous_periods = (expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, n_loc = 90, block_lower_tri_idx = get_lower_tri_idx(90, T)))
+#### covmat_current_period = expand_covmat_into_blocks(covmat_coeffs = covmat_coeffs_1$covmat, n_loc = 40, block_lower_tri_idx = get_lower_tri_idx(40, T))[[1]]
+#### side_blocks_rectangles = covmat_coeffs_12$covmat
 
 
 expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_period, side_blocks_rectangles = NULL)
@@ -392,106 +384,11 @@ expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_per
   res
 }
 
-full_covmat = expand_full_covmat(covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, block_lower_tri_idx = get_lower_tri_idx(90, T), n_loc = 90), 
-                                 covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = get_lower_tri_idx(40, T), n_loc = 40), 
-                                 side_blocks_rectangles  = covmat_coeffs_12$covmat
-                                 )
-chol(full_covmat)
-my_image(log(.5+full_covmat))
+#### full_covmat = expand_full_covmat(covmat_previous_periods = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_2$covmat, block_lower_tri_idx = get_lower_tri_idx(90, T), n_loc = 90), 
+####                                  covmat_current_period   = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = get_lower_tri_idx(40, T), n_loc = 40), 
+####                                  side_blocks_rectangles  = covmat_coeffs_12$covmat
+####                                  )
+#### chol(full_covmat)
+#### my_image(log(.5+full_covmat))
 
-multiply_vector_block_toeplitz_sparse = function(v, covmat_coeffs, n_loc, idx_mat)
-{
-  k = ncol(covmat_coeffs)
-  v_ = matrix(v, ncol = k)
-  res = matrix(0, n_loc, k)
-  for(lag_idx in seq(k))
-  {
-    toeplitz_idx = rep(0, k)
-    toeplitz_idx[lag_idx]=1
-    res = res + Multiply_matrix_compressed_symmat(v_, covmat_coeffs[,lag_idx], idx_mat, n_loc) %*% toeplitz(toeplitz_idx)
-  }
-  res
-}
-
-
-# sparse multiplication for upper right blocks
-v =  rnorm(180)
-idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=0
-idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
-
-Multiply_vector_side_blocks_upper_right(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
-  (covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(90)]-
-  (covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v[seq(91, 180)]
-
-# sparse multiplication for left vertical blocks
-v =  rnorm(40)
-
-Multiply_vector_side_blocks_vertical_left(v = v, side_block_rectangles = covmat_coeffs_12$covmat[,,c(1, 2), drop = F], idx_mat = idx_mat_12)-
-  c(as.vector(Matrix::t(covmat_coeffs_12$covmat[,,1]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v),
-    as.vector(Matrix::t(covmat_coeffs_12$covmat[,,2]*Matrix::sparseMatrix(i=idx_mat_12[,1], j=idx_mat_12[,2]))%*%v))
-
-
-
-multiply_vector_full_covmat_sparse = function(
-    v, 
-    covmat_coeffs_current_period,  n_loc_current_period,  idx_mat_current_period, 
-    covmat_coeffs_previous_period, n_loc_previous_period, idx_mat_previous_period, 
-    side_blocks_rectangles, idx_mat_side_block_rectangles
-)
-{
-  res = matrix(0, length(v), 1)
-  idx = seq(length(v)-n_loc_current_period+1, length(v))
-  if(!is.null(covmat_coeffs_previous_period))res[-idx] = multiply_vector_block_toeplitz_sparse(
-    v = v[-idx], 
-    covmat_coeffs = covmat_coeffs_previous_period, 
-    n_loc = n_loc_previous_period, 
-    idx_mat = idx_mat_previous_period
-  )
-  if(!is.null(idx_mat_side_block_rectangles))res[-idx] = res[-idx] + 
-    Multiply_vector_side_blocks_vertical_left(v = v[idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
-  if(!is.null(idx_mat_current_period))res[idx] = multiply_vector_block_toeplitz_sparse(
-    v = v[idx], 
-    covmat_coeffs = covmat_coeffs_current_period, 
-    n_loc = n_loc_current_period, 
-    idx_mat = idx_mat_current_period
-  )
-  if(!is.null(idx_mat_side_block_rectangles))res[idx] = res[idx] + 
-    Multiply_vector_side_blocks_upper_right(v = v[-idx], side_block_rectangles = side_blocks_rectangles, idx_mat = idx_mat_side_block_rectangles)
-  res
-}
-
-###idx_mat_current_period  = get_lower_tri_idx(40, T) 
-###idx_mat_previous_period = get_lower_tri_idx(90, T)
-###
-###idx_mat_12 = (outer(var_tag_1==1, var_tag_2 ==2) + outer(var_tag_1==2, var_tag_2 ==1))!=-1
-###idx_mat_12 = cbind(row(idx_mat_12)[idx_mat_12], col(idx_mat_12)[idx_mat_12])
-###
-###v=  rnorm(nrow(full_covmat))
-###multiply_vector_full_covmat_sparse(
-###  v = v, 
-###  covmat_coeffs_current_period = covmat_coeffs_1$covmat,  n_loc_current_period = 40,   idx_mat_current_period = idx_mat_current_period,
-###  covmat_coeffs_previous_period = covmat_coeffs_2$covmat, n_loc_previous_period =  90, idx_mat_previous_period = idx_mat_previous_period,
-###  side_blocks_rectangles = covmat_coeffs_12$covmat, idx_mat_side_block_rectangles = idx_mat_12
-###  )- 
-###full_covmat%*%v  
-
-
-locs_1 = as.matrix(expand.grid(seq(40), seq(40))/40)
-var_tag_1 = 1+floor(n_var*runif(nrow(locs_1)))
-covmat_coeffs_1  =   GMA_compressed(
-  locs = locs_1, 
-  lower_tri_idx = get_lower_tri_idx(nrow(locs_1), diag = T),
-  var_idx = position_in_lower_tri_cross_vec(var_tag_1, n_var, diag = T),
-  multiplier = multiplier[1,,drop=FALSE], 
-  effective_range = effective_range,
-  nu_ = expand_nu(nu_vec),
-  rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
-)
-
-covmat = expand_block_toeplitz_covmat(covmat_coeffs = covmat_coeffs_1$covmat, block_lower_tri_idx = get_lower_tri_idx(nrow(locs_1), T), n_loc = nrow(locs_1))
-Bidart::plot_pointillist_painting(
-  locs_1, 
-  t(chol(covmat))%*% rnorm(nrow(locs_1))
-)
-diag(backsolve(t(chol(covmat)), t(chol(covmat))))
 

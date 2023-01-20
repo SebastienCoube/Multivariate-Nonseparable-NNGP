@@ -42,6 +42,8 @@ get_beta = function(
   beta_prior_precision # prior for the regression coefficients
   )
 {
+  PROBLEM with exp of subsetted mat instead of subset of expmat + 
+    use mixed product on crossprod of kro
   # Amelioration possible : utiliser la formule de Kronecker pour avoir
   # (chol tau x X) T (chol tau x X) =  (chol tau T x XT)  (chol tau x X) = tau x XTX
   
@@ -80,13 +82,13 @@ get_beta = function(
 }
 
 # get number of rows of symmetric matrix given number of components
-nrow_sqare_matrix = function(mat_coord_length)(-1+ sqrt(1 + 8*mat_coord_length))/2
-nrow_sqare_matrix(3)
+nrow_square_matrix = function(mat_coord_length)(-1+ sqrt(1 + 8*mat_coord_length))/2
+nrow_square_matrix(3)
 
 #  symmetric matrix
 get_symmetric_mat = function(mat_coordinates)
 {
-  M = matrix(0,nrow_sqare_matrix(length(mat_coordinates)),nrow_sqare_matrix(length(mat_coordinates)))
+  M = matrix(0,nrow_square_matrix(length(mat_coordinates)),nrow_square_matrix(length(mat_coordinates)))
   M[lower.tri(M, diag = T)] = mat_coordinates
   M = t(M)
   M[lower.tri(M, diag = T)] = mat_coordinates
@@ -142,12 +144,15 @@ get_symmetric_expmat(c(.0001,0,0))
 get_symmetric_expmat_derivatives(c(0,0,0))
 get_symmetric_expmat_derivatives(c(0))
 
-get_symmetric_expmat_derivatives(c(0,0,0))[[1]][[1]]-(get_symmetric_expmat(c(0.00001,0,0))-get_symmetric_expmat(c(0,0,0)))*100000
-get_symmetric_expmat_derivatives(c(0,0,0))[[1]][[2]]-(determinant(get_symmetric_expmat(c(0.00001,0,0)))$mod-determinant(get_symmetric_expmat(c(0,0,0)))$mod)*100000
-get_symmetric_expmat_derivatives(c(0,0,0))[[2]][[1]]-(get_symmetric_expmat(c(0,0.00001,0))-get_symmetric_expmat(c(0,0,0)))*100000
-get_symmetric_expmat_derivatives(c(0,0,0))[[2]][[2]]-(determinant(get_symmetric_expmat(c(0,0.00001,0)))$mod-determinant(get_symmetric_expmat(c(0,0,0)))$mod)*100000
+mat_coord = rnorm(3)
+get_symmetric_expmat_derivatives(mat_coord)[[1]][[1]]-(get_symmetric_expmat(mat_coord+c(0.00001,0,0))-get_symmetric_expmat(mat_coord))*100000
+get_symmetric_expmat_derivatives(mat_coord)[[1]][[2]]-(determinant(get_symmetric_expmat(mat_coord+c(0.00001,0,0)))$mod-determinant(get_symmetric_expmat(mat_coord))$mod)*100000
+get_symmetric_expmat_derivatives(mat_coord)[[2]][[1]]-(get_symmetric_expmat(mat_coord+c(0,0.00001,0))-get_symmetric_expmat(mat_coord))*100000
+get_symmetric_expmat_derivatives(mat_coord)[[2]][[2]]-(determinant(get_symmetric_expmat(mat_coord+c(0,0.00001,0)))$mod-determinant(get_symmetric_expmat(mat_coord))$mod)*100000
+get_symmetric_expmat_derivatives(mat_coord)[[3]][[1]]-(get_symmetric_expmat(mat_coord+c(0,0,0.00001))-get_symmetric_expmat(mat_coord))*100000
 
-get_symmetric_expmat_derivatives_(c(0,0,0))[[1]][[1]]-(get_symmetric_expmat(c(0.000001,0,0))-get_symmetric_expmat(c(0,0,0)))*1000000
+
+get_symmetric_expmat_derivatives_(mat_coord)[[1]][[1]]-(get_symmetric_expmat(c(0.000001,0,0))-get_symmetric_expmat(mat_coord))*1000000
 
 
 
