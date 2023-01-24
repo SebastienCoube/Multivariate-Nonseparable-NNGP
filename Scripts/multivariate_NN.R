@@ -48,6 +48,7 @@
  
 # var_tag must be integer and unique(var_tag) must be increasing
 find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE){
+  var_tag = match(var_tag, unique(var_tag)) # making unique(var_tag) increasing
   if(m_other_vars==0 & m_same_var==0)
   {
     NNarray = GpGp::find_ordered_nn(locs = locs, m = m_whatever_closest, lonlat = lonlat)
@@ -152,8 +153,9 @@ find_ordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_
 
 
 
-# var_tag must be integer and unique(var_tag) must be increasing
+# var_tag must be integer
 find_unordered_nn_multi <- function(locs, m_whatever_closest, m_same_var, m_other_vars, var_tag, lonlat = FALSE){
+  var_tag = match(var_tag, unique(var_tag)) # making unique(var_tag) increasing
   # number of locations
   n <- nrow(locs)
   nvar = length(unique(var_tag))

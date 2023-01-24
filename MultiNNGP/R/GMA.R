@@ -205,7 +205,7 @@ put_ones_in_rho_vec = function(rho_vec)
 
 # compute unique elements of GMA covmat
 GMA_compressed = function(
-    locs, 
+    locs_, 
     var_idx,
     lower_tri_idx,
     multiplier, 
@@ -216,10 +216,10 @@ GMA_compressed = function(
 )
 {
   # size of spatial sets of interest
-  n_loc = nrow(locs)
+  n_loc = nrow(locs_)
   n_lags = nrow(multiplier)
-  # distance between locs pairs
-  h = as.matrix(dist(locs, diag = T));h = h[lower.tri(h, diag = T)]
+  # distance between locs_ pairs
+  h = as.matrix(dist(locs_, diag = T));h = h[lower.tri(h, diag = T)]
   if(all(h==0)) h = .00001
   h[h==0] = min(h[h!=0])*.0001
   # creating matrices
@@ -267,7 +267,7 @@ GMA_rectangular = function(
   n_loc_1 = nrow(locs_1)
   n_loc_2 = nrow(locs_1)
   n_lags = nrow(multiplier)
-  # distance between locs pairs
+  # distance between locs_ pairs
   h = fields::rdist(locs_1, locs_2)
   h[h==0] = min(h[h!=0])*.0001
   # creating matrices
@@ -303,7 +303,7 @@ expand_nu = function(nu_vec){nu_ = outer(nu_vec, nu_vec, "+") ; nu_ = nu_/2; nu_
 
 #### # carry on with toy example
 #### covmat_coeffs_1  =   GMA_compressed(
-####   locs = locs_1, 
+####   locs_ = locs_1, 
 ####   lower_tri_idx = get_lower_tri_idx(nrow(locs_1), diag = T),
 ####   var_idx = position_in_lower_tri_cross_vec(var_tag_1, n_var, diag = T),
 ####   multiplier = multiplier[1,,drop=FALSE], 
@@ -312,7 +312,7 @@ expand_nu = function(nu_vec){nu_ = outer(nu_vec, nu_vec, "+") ; nu_ = nu_/2; nu_
 ####   rho_vec_with_ones = put_ones_in_rho_vec(rho_vec)
 #### )
 #### covmat_coeffs_2  =   GMA_compressed(
-####   locs = locs_2, 
+####   locs_ = locs_2, 
 ####   lower_tri_idx = get_lower_tri_idx(nrow(locs_2), diag = T),
 ####   var_idx = position_in_lower_tri_cross_vec(var_tag_2, n_var, diag = T),
 ####   multiplier = multiplier[-nrow(multiplier),,drop=FALSE], 
@@ -355,6 +355,7 @@ expand_covmat_into_blocks = function(covmat_coeffs, n_loc, block_lower_tri_idx)
 
 expand_block_toeplitz_covmat = function(covmat_coeffs, block_lower_tri_idx, n_loc)
 {
+  if(is.null(covmat_coeffs))return(NULL)
   blocks = expand_covmat_into_blocks(covmat_coeffs, n_loc, block_lower_tri_idx)
   block_idx_matrix = toeplitz(c(seq(ncol(covmat_coeffs))))
   res=  matrix(0, n_loc*ncol(covmat_coeffs), n_loc*ncol(covmat_coeffs))
@@ -381,6 +382,7 @@ expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_per
   
   res[-seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))] = unlist(side_blocks_rectangles)
   res[seq(ncol(covmat_previous_periods)), -seq(ncol(covmat_previous_periods))] = t(res[-seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))])
+  diag(res) = 1.0001
   res
 }
 
