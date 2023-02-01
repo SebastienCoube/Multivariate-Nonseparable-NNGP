@@ -469,4 +469,8 @@ vecchia_blocks_solve = function(x, vecchia_blocks, time_depth)
 ### plot(locs_[var_tag==6,2], w[var_tag==6])
 
 
+
+
+
+
  

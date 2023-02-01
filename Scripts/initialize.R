@@ -1,4 +1,4 @@
-
+problem with noise info length in mcmc nngp list
 # generating data 
 n_loc = 500
 n_time = 200

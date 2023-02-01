@@ -1,6 +1,7 @@
 source("MultiNNGP/R/GMA.R")
 source("MultiNNGP/R/multivariate_NN.R")
 source("MultiNNGP/R/vecchia.R")
+my_image = function(m)image(t(m)[,nrow(m):1])
 
 
 # generating data 
@@ -69,6 +70,7 @@ array_matrix_mult = function(a, m)
   res
 }
 
+
 #  symmetric matrix
 get_symmetric_mat = function(mat_coordinates)
 {
@@ -110,6 +112,7 @@ get_tau_precision = function(expmat, y)solve(expmat[!is.na(y), !is.na(y)])
 get_tau_info = function(mat_coordinates, y)
 {
   if(all(is.na(y)))return(NULL)
+  if(all(is.na(mat_coordinates)))return(NULL)
   res = list()
   expmat_and_derivatives = get_expmat_and_derivatives(mat_coordinates = mat_coordinates)
   res$tau_precision = get_tau_precision(expmat_and_derivatives$expmat, y)
@@ -118,18 +121,51 @@ get_tau_info = function(mat_coordinates, y)
 }
 
 
+### get all noise precision matrices and their derivatives following NA pattern of y 
+##get_noise_info = function(X_noise_list, noise_beta, y, y_NA_possibilities)
+##{
+##  res = list()
+##  mat_coordinates_array = array_matrix_mult(X_noise_list$X_killed_NA, noise_beta)
+##  # nonstationary case
+##  if(!X_noise_list$is_only_intercept) expmat_and_derivatives = parallel::mcmapply(
+##    FUN = get_tau_info, 
+##    mat_coordinates = lapply(X_noise_list$no_NA_idx_split, function(x)mat_coordinates_array[x[1],,x[2]]),
+##    y = lapply(X_noise_list$no_NA_idx_split, function(x)y[x[1],,x[2]]), 
+##    SIMPLIFY = F, mc.cores = parallel::detectCores()-1
+##  )
+##  # stationary case
+##  if(X_noise_list$is_only_intercept)
+##  {
+##    tau_info_cases = lapply(
+##      split(y_NA_possibilities, row(y_NA_possibilities)), 
+##      function(x)get_tau_info(mat_coordinates = rep(1, nrow(noise_beta))%*%noise_beta, y = x)
+##    )
+##    expmat_and_derivatives = lapply(
+##      X_noise_list$y_NA_pattern, 
+##      function(x)tau_info_cases[[x]])
+##  }
+##    
+##  return(expmat_and_derivatives)
+##}
+
+
 # get all noise precision matrices and their derivatives following NA pattern of y 
-get_noise_info = function(X_noise_list, noise_beta, y, y_NA_possibilities)
+get_noise_info = function(X_noise_list, noise_beta, y_NA_possibilities_match, y_NA_possibilities)
 {
-  res = list()
-  mat_coordinates_array = array_matrix_mult(X_noise_list$X_killed_NA, noise_beta)
+  mat_coordinates_array = array_matrix_mult(X_noise_list$X, noise_beta)
   # nonstationary case
-  if(!X_noise_list$is_only_intercept) expmat_and_derivatives = parallel::mcmapply(
-    FUN = get_tau_info, 
-    mat_coordinates = lapply(X_noise_list$no_NA_idx_split, function(x)mat_coordinates_array[x[1],,x[2]]),
-    y = lapply(X_noise_list$no_NA_idx_split, function(x)y[x[1],,x[2]]), 
-    SIMPLIFY = F, mc.cores = parallel::detectCores()-1
-  )
+  if(!X_noise_list$is_only_intercept) expmat_and_derivatives = parallel::mclapply(
+    seq(dim(y)[1]), function(loc_index)
+    {
+      lapply(seq(dim(y)[3]), function(time_index)
+      {
+        if(all(is.na(y[loc_index,,time_index])))return(NULL)
+        return(get_tau_info(
+          mat_coordinates = X_noise_list$X[loc_index,,time_index]%*%noise_beta,
+          y = y[loc_index,,time_index]
+          ))
+      })
+    }, mc.cores = parallel::detectCores()-1)
   # stationary case
   if(X_noise_list$is_only_intercept)
   {
@@ -137,15 +173,15 @@ get_noise_info = function(X_noise_list, noise_beta, y, y_NA_possibilities)
       split(y_NA_possibilities, row(y_NA_possibilities)), 
       function(x)get_tau_info(mat_coordinates = rep(1, nrow(noise_beta))%*%noise_beta, y = x)
     )
-    expmat_and_derivatives = lapply(
-      X_noise_list$y_NA_pattern, 
-      function(x)tau_info_cases[[x]])
+    expmat_and_derivatives = lapply(seq(dim(y)[1]), function(loc_index)
+   {
+     lapply(seq(dim(y)[3]), function(time_index)
+     {
+       tau_info_cases[[y_NA_possibilities_match[loc_index, time_index]]]
+     })
+   })
   }
-    
   return(expmat_and_derivatives)
-  #res$tau_precision = get_tau_precision(expmat_and_derivatives$expmat, y)
-  #res$tau_precision_deriv = lapply(expmat_and_derivatives$expmat_derivative, function(x) res$tau_precision %*% x[!is.na(y), !is.na(y)] %*% res$tau_precision)
-  #res
 }
 
 
@@ -164,11 +200,11 @@ process_covariates = function(X, y)
   res$X_killed_NA = X; res$X_killed_NA[is.na(res$X_killed_NA)] = 0 # X where NAs replaced by 0
   res$chol_X = chol(crossprod(apply(res$X_killed_NA, 2, c))) # chol of covariance along dim 2
   res$no_NA_pattern =  !apply(X, c(1, 3), anyNA) # complete observations along dim 2
-  res$no_NA_idx = cbind(row(res$no_NA_pattern)[res$no_NA_pattern], col(res$no_NA_pattern)[res$no_NA_pattern]) # dim 1 and 3 of complete observations 
-  res$no_NA_idx_split = split(res$no_NA_idx, row(res$no_NA_idx))  # dim 1 and 3 of complete observations, split into list
+  #res$no_NA_idx = cbind(row(res$no_NA_pattern)[res$no_NA_pattern], col(res$no_NA_pattern)[res$no_NA_pattern]) # dim 1 and 3 of complete observations 
+  #res$no_NA_idx_split = split(res$no_NA_idx, row(res$no_NA_idx))  # dim 1 and 3 of complete observations, split into list
   res$is_only_intercept = (dim(X)[2]==1)&all(na.omit(c(X))==1) # bool to check if X is only an intercept
   
-  # used in intercept only. tells which y are observed at thee indices of res$no_NA_idx_split
+  # used in intercept only. tells which y are observed at the indices of res$no_NA_idx_split
   y_NA_possibilities = as.matrix(expand.grid(lapply(seq(dim(y)[2]), function(i)c(1,NA))))
   y_NA_possibilities = y_NA_possibilities[-nrow(y_NA_possibilities),]
   y_NA_possibilities = split(y_NA_possibilities, row(y_NA_possibilities))
@@ -221,7 +257,8 @@ make_simple_Vecchia_approx_DAG =
       ), 
       field_position = list( # position of sampled w in the loc-var array 
         "location_idx" = loc_idx[at_least_one_obs],
-        "var_idx" = var_tag[at_least_one_obs]
+        "var_idx" = var_tag[at_least_one_obs], 
+        "loc_match" = split(seq(length(loc_idx[at_least_one_obs])), loc_idx[at_least_one_obs])
       )
     )
   )
@@ -301,7 +338,9 @@ multivariate_NNGP_initialize = function(
   if(!is.matrix(locs))stop("locs should be a matrix")
   # checking dimension
   if(dim(y)[1]!= nrow(locs)) stop("the first dimension of y should be equal to the number of spatial locations")
-  if(any(dim(y)[c(1,3)]!=dim(X)[c(1,3)]))stop("dimensions 1 (spatial location), 3 (time) and 4(observations) of y and X should be the same")
+  if(any(dim(y)[c(1,3)]!=dim(X)[c(1,3)]))stop("dimensions 1 (spatial location) and 3 (time)  of y and X should be the same")
+  if(any(dim(y)[c(1,3)]!=dim(X_scale)[c(1,3)]))stop("dimensions 1 (spatial location) and 3 (time) of y and X_scale should be the same")
+  if(any(dim(y)[c(1,3)]!=dim(X_noise)[c(1,3)]))stop("dimensions 1 (spatial location) and 3 (time) of y and X_noise should be the same")
   # checking X
   if(any((apply(y, c(1, 3), anyNA)==F)&(apply(X, c(1, 3), anyNA)==T)))stop("X should have no NAs where y has no NAs (but it is possible, and even recommended, for X to have observations even where y has NAs)")
   if(any((apply(y, c(1, 3), anyNA)==F)&(apply(X_noise, c(1, 3), anyNA)==T)))stop("X_noise should have no NAs where y has no NAs")
@@ -309,6 +348,13 @@ multivariate_NNGP_initialize = function(
   #########################
   # Processing covariates #
   #########################
+  # adding buffer
+  if(dim(y)[3]>1){
+    X =       abind::abind(array(123456 , c(dim(X)      [c(1,2)], 5*time_depth)), X,       along = 3)
+    X_scale = abind::abind(array(123456 , c(dim(X_scale)[c(1,2)], 5*time_depth)), X_scale, along = 3)
+    X_noise = abind::abind(array(NA, c(dim(X_noise)[c(1,2)], 5*time_depth)), X_noise, along = 3)
+    y =       abind::abind(array(NA , c(dim(y)      [c(1,2)], 5*time_depth)), y,       along = 3)
+  }
   covariates = 
     parallel::mcmapply(process_covariates, list(X, X_noise, X_scale), list(y,y,y), SIMPLIFY = F)
   names(covariates) = c("X", "X_noise", "X_scale")
@@ -322,7 +368,9 @@ multivariate_NNGP_initialize = function(
   # useful stuff #
   ################
   useful_stuff = list()
+  useful_stuff$n_loc = nrow(locs)
   useful_stuff$time_depth = time_depth
+  useful_stuff$buffer_depth  =5*time_depth
   useful_stuff$y_split = apply(y, c(1, 3), c, simplify = F) # split  by time and loc for density computation
   useful_stuff$non_na_y = apply(y, c(1, 3), function(x)which(!is.na(x)), simplify = F) 
   useful_stuff$n_var_y = dim(y)[2] # number of variables in y
@@ -333,9 +381,26 @@ multivariate_NNGP_initialize = function(
   useful_stuff$n_field = length(Vecchia_approx_DAG$field_position$location_idx) # number of loc-var pairs in the latent field
   useful_stuff$non_na_count = apply(y, 2, function(x)sum(!is.na(x))) # number of non na obs per space-time position
   # possible configurations of na patterns in y
-  useful_stuff$y_NA_possibilities = as.matrix(expand.grid(lapply(seq(dim(y)[2]), function(i)c(1,NA))))[-2^useful_stuff$n_var_y,]
+  useful_stuff$y_NA_possibilities = as.matrix(expand.grid(lapply(seq(dim(y)[2]), function(i)c(T,F))))#[-2^useful_stuff$n_var_y,]
+  useful_stuff$y_NA_possibilities_match = array_matrix_mult(is.na(y), matrix(2^seq(dim(y)[2]-1, 0)))[,1,]+1
   useful_stuff$lower_tri_idx = get_lower_tri_idx_DAG(Vecchia_approx_DAG$DAG) # lower triangular idx for Vecchia approx
   useful_stuff$var_idx = get_var_idx(Vecchia_approx_DAG$DAG, Vecchia_approx_DAG$field_position$var_idx) # lower triangular idx for Veccchia approx
+  # var-loc couples of y where there is at least one observation in all time periods
+  useful_stuff$y_at_least_one_obs = apply(y, c(1, 2), function(x)!all(is.na(x))); useful_stuff$y_at_least_one_obs = split(useful_stuff$y_at_least_one_obs, row(useful_stuff$y_at_least_one_obs)) # loc - var pairs with at least one obs
+  useful_stuff$n_field_per_site = lapply(useful_stuff$y_at_least_one_obs, sum)# number of latent field variables simulated per spatial site
+  # position of current observation in the var-loc couples of y where there is at least one observation in all time periods
+  useful_stuff$position_in_y_at_least_one_obs = 
+    apply(y, 3, function(y_slice)
+    {
+      mapply(
+        FUN = function(y_obs, y_at_least_one_obs)return(which(!is.na(y_obs[y_at_least_one_obs]))),
+        y_obs = split(y_slice, row(y_slice)),
+        y_at_least_one_obs = useful_stuff$y_at_least_one_obs, 
+        SIMPLIFY = F
+      )
+    },
+    simplify = F
+    )
   
   ######################
   # Hierarchical model #
@@ -402,8 +467,8 @@ multivariate_NNGP_initialize = function(
     chains[[i]]$stuff$noise_info = get_noise_info(
       X_noise_list = covariates$X_noise, 
       noise_beta = chains[[i]]$params$noise_beta, 
-      y = y, y_NA_possibilities = useful_stuff$y_NA_possibilities)
-    
+      y_NA_possibilities_match = useful_stuff$y_NA_possibilities_match, 
+      y_NA_possibilities = useful_stuff$y_NA_possibilities)
     
     chains[[i]]$stuff$vecchia = 
       vecchia_block_approx( 
@@ -414,10 +479,8 @@ multivariate_NNGP_initialize = function(
     lambda = chains[[i]]$params$lambda, r = chains[[i]]$params$r, 
     A_vec = chains[[i]]$params$A_vec, nu_vec = chains[[i]]$params$nu_vec, a2_vec = chains[[i]]$params$a2_vec
       )
-    
-
   }
-  
+  list("chains" = chains, "useful_stuff" = useful_stuff, "covariates"= covariates, "Vecchia_approx_DAG" = Vecchia_approx_DAG, "y" = y, "locs" = locs, "hierarchical_model" = hierarchical_model)
 }
 
 
@@ -675,8 +738,35 @@ Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
 mcmc_nngp_list = multivariate_NNGP_initialize(
   y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
 
+#################################################################################
+# test : some loc-var couples never observed in Y, only an intercept in X_noise #
+#################################################################################
+y = array(dim = c(n_loc, n_var, n_time))
+dimnames(y) = list(
+  paste("loc", seq(n_loc), sep = "_"), 
+  paste("var", seq(n_var), sep = "_"), 
+  paste("time", seq(n_time), sep = "_")
+)
+y[] = rnorm(length(y))
+y[,,seq(50)] = NA
 
+y[,,seq(61, 70)] = NA
 
-
-
-
+X = array(dim = c(n_loc, 10, n_time))
+dimnames(X) = list(
+  paste("loc", seq(n_loc), sep = "_"), 
+  paste("covariate", seq(dim(X)[2]), sep = "_"), 
+  paste("time", seq(n_time), sep = "_")
+)
+X[] = rnorm(length(X))
+X[,1,] = 1
+X_noise = X
+X_noise[,,seq(50)] = NA
+X_noise = X_noise[,1,,drop = F]
+X_scale = X
+locs = matrix(runif(2*n_loc), n_loc)
+Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
+  y = y, locs = locs
+)
+mcmc_nngp_list = multivariate_NNGP_initialize(
+  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
