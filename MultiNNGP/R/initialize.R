@@ -150,7 +150,7 @@ get_tau_info = function(mat_coordinates, y)
 
 
 # get all noise precision matrices and their derivatives following NA pattern of y 
-get_noise_info = function(X_noise_list, noise_beta, y_NA_possibilities_match, y_NA_possibilities)
+get_noise_info = function(X_noise_list, noise_beta, y_NA_possibilities_match, y_NA_possibilities, y)
 {
   mat_coordinates_array = array_matrix_mult(X_noise_list$X, noise_beta)
   # nonstationary case
@@ -159,7 +159,6 @@ get_noise_info = function(X_noise_list, noise_beta, y_NA_possibilities_match, y_
     {
       lapply(seq(dim(y)[3]), function(time_index)
       {
-        if(all(is.na(y[loc_index,,time_index])))return(NULL)
         return(get_tau_info(
           mat_coordinates = X_noise_list$X[loc_index,,time_index]%*%noise_beta,
           y = y[loc_index,,time_index]
@@ -298,6 +297,9 @@ vecchia_block_approx = function(
     time_depth = time_depth) 
 }
 
+
+time_depth = 5
+n_chains = 1
 
 #' @param y a 3-D array 
 #' whose first dim corresponds to spatial locations, 
@@ -468,7 +470,8 @@ multivariate_NNGP_initialize = function(
       X_noise_list = covariates$X_noise, 
       noise_beta = chains[[i]]$params$noise_beta, 
       y_NA_possibilities_match = useful_stuff$y_NA_possibilities_match, 
-      y_NA_possibilities = useful_stuff$y_NA_possibilities)
+      y_NA_possibilities = useful_stuff$y_NA_possibilities, 
+      y = y)
     
     chains[[i]]$stuff$vecchia = 
       vecchia_block_approx( 
@@ -480,6 +483,8 @@ multivariate_NNGP_initialize = function(
     A_vec = chains[[i]]$params$A_vec, nu_vec = chains[[i]]$params$nu_vec, a2_vec = chains[[i]]$params$a2_vec
       )
   }
+  names(chains) = paste("chain", seq(n_chains), sep = "_")
+  
   list("chains" = chains, "useful_stuff" = useful_stuff, "covariates"= covariates, "Vecchia_approx_DAG" = Vecchia_approx_DAG, "y" = y, "locs" = locs, "hierarchical_model" = hierarchical_model)
 }
 
