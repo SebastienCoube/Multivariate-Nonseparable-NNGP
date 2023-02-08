@@ -1,35 +1,35 @@
-source("MultiNNGP/R/GMA.R")
-source("MultiNNGP/R/multivariate_NN.R")
-source("MultiNNGP/R/vecchia.R")
-my_image = function(m)image(t(m)[,nrow(m):1])
+### source("MultiNNGP/R/GMA.R")
+### source("MultiNNGP/R/multivariate_NN.R")
+### source("MultiNNGP/R/vecchia.R")
+ my_image = function(m)image(t(m)[,nrow(m):1])
 
 
-# generating data 
-n_loc = 500
-n_time = 200
-n_var = 5
-
-# full data
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-  )
-y[] = rnorm(length(y))
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-  )
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_scale = X
-
-locs = matrix(runif(2*n_loc), n_loc)
+## # generating data 
+## n_loc = 500
+## n_time = 200
+## n_var = 5
+## 
+## # full data
+## y = array(dim = c(n_loc, n_var, n_time))
+## dimnames(y) = list(
+##   paste("loc", seq(n_loc), sep = "_"), 
+##   paste("var", seq(n_var), sep = "_"), 
+##   paste("time", seq(n_time), sep = "_")
+##   )
+## y[] = rnorm(length(y))
+## 
+## X = array(dim = c(n_loc, 10, n_time))
+## dimnames(X) = list(
+##   paste("loc", seq(n_loc), sep = "_"), 
+##   paste("covariate", seq(dim(X)[2]), sep = "_"), 
+##   paste("time", seq(n_time), sep = "_")
+##   )
+## X[] = rnorm(length(X))
+## X[,1,] = 1
+## X_noise = X
+## X_scale = X
+## 
+## locs = matrix(runif(2*n_loc), n_loc)
 
 # computes cross-product of array along the first and third dimension (typically gives a crossprod per variable)
 array_crossprod = function(array_1, array_2 = NULL)
@@ -240,7 +240,8 @@ make_simple_Vecchia_approx_DAG =
     m_same_var         = m_same_var_same_time,
     m_other_vars       = m_other_vars_same_time,
     lonlat = F)
-  NNarray_pevious_times = find_unordered_nn_multi(
+  NNarray_pevious_times = NULL
+  if(dim(y)[3]>1)NNarray_pevious_times = find_unordered_nn_multi(
     locs = locs_, 
     var_tag = var_tag_, 
     m_whatever_closest = m_whatever_closest_previous_times, 
@@ -263,9 +264,9 @@ make_simple_Vecchia_approx_DAG =
   )
   }
 
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
+### Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
+###   y = y, locs = locs
+### )
 
 
 # computes vecchia approx from parameters
@@ -274,6 +275,13 @@ vecchia_block_approx = function(
     rho_vec, a, b, cc, delta, lambda, r, 
     A_vec, nu_vec, a2_vec
 ){
+  if(is.null(a))a=.5
+  if(is.null(b))b=.5
+  if(is.null(cc))cc=.5
+  if(is.null(delta))delta=.5
+  if(is.null(lambda))lambda=.5
+  if(is.null(r))r=.5
+  if(is.null(A_vec))A_vec = rep(.5, length(nu_vec))
   multiplier = get_multiplier(
     a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
     r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, 
@@ -298,8 +306,8 @@ vecchia_block_approx = function(
 }
 
 
-time_depth = 5
-n_chains = 1
+### time_depth = NULL
+### n_chains = 2
 
 #' @param y a 3-D array 
 #' whose first dim corresponds to spatial locations, 
@@ -324,7 +332,7 @@ multivariate_NNGP_initialize = function(
     X, 
     X_noise,
     X_scale, 
-    time_depth = 5,
+    time_depth = NULL,
     Vecchia_approx_DAG, 
     n_chains = 2
   )
@@ -347,6 +355,24 @@ multivariate_NNGP_initialize = function(
   if(any((apply(y, c(1, 3), anyNA)==F)&(apply(X, c(1, 3), anyNA)==T)))stop("X should have no NAs where y has no NAs (but it is possible, and even recommended, for X to have observations even where y has NAs)")
   if(any((apply(y, c(1, 3), anyNA)==F)&(apply(X_noise, c(1, 3), anyNA)==T)))stop("X_noise should have no NAs where y has no NAs")
   if(any(is.na(X_scale)))stop("X_scale can have no NA")
+  ###################
+  # some processing #
+  ###################
+  if(is.null(time_depth)){
+    if(dim(y)[3]==1)time_depth = 1
+    if(dim(y)[3]> 1)time_depth = 5
+  }
+  # removing unobserved stuff in Y
+  all_na_idx = apply(y, c(1), function(x)all(is.na(x)))
+  if(any(all_na_idx))
+  {
+    message("some locations where y is always NA were removed")
+    all_na_idx = which(all_na_idx)
+    X = X[-all_na_idx,,,drop=F]
+    X_noise = X_noise[-all_na_idx,,,drop=F]
+    X_scale = X_scale[-all_na_idx,,,drop=F]
+    y = y[-all_na_idx,,,drop=F]
+  }
   #########################
   # Processing covariates #
   #########################
@@ -457,7 +483,7 @@ multivariate_NNGP_initialize = function(
     {
       chains[[i]]$params$alpha = .01 * runif(1)
       chains[[i]]$params$a_scal = runif(1) 
-      chains[[i]]$params$b = runif(1) 
+      chains[[i]]$params$b_scal = runif(1) 
       chains[[i]]$params$cc = 1*runif(1) 
       chains[[i]]$params$delta = runif(1) 
       chains[[i]]$params$r = 1 * runif(1) 
@@ -478,7 +504,7 @@ multivariate_NNGP_initialize = function(
     Vecchia_approx_DAG = Vecchia_approx_DAG, locs = locs, lower_tri_idx_DAG = useful_stuff$lower_tri_idx, 
     var_idx = useful_stuff$var_idx, time_depth = useful_stuff$time_depth, #does not depend on params
     rho_vec = chains[[i]]$params$rho_vec, a =  chains[[i]]$params$a_scal,
-    b = chains[[i]]$params$b, cc = chains[[i]]$params$cc, delta = chains[[i]]$params$delta, 
+    b = chains[[i]]$params$b_scal, cc = chains[[i]]$params$cc, delta = chains[[i]]$params$delta, 
     lambda = chains[[i]]$params$lambda, r = chains[[i]]$params$r, 
     A_vec = chains[[i]]$params$A_vec, nu_vec = chains[[i]]$params$nu_vec, a2_vec = chains[[i]]$params$a2_vec
       )
@@ -487,291 +513,3 @@ multivariate_NNGP_initialize = function(
   
   list("chains" = chains, "useful_stuff" = useful_stuff, "covariates"= covariates, "Vecchia_approx_DAG" = Vecchia_approx_DAG, "y" = y, "locs" = locs, "hierarchical_model" = hierarchical_model)
 }
-
-
-########################
-# test : some NAs in Y #
-########################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[cbind(
-  1+floor(dim(y)[1]*runif(10000)),
-  1+floor(dim(y)[2]*runif(10000)),
-  1+floor(dim(y)[3]*runif(10000))
-)] = NA
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_scale = X
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-###################################################
-# test : some loc-var couples never observed in Y #
-###################################################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[cbind(
-  1+floor(dim(y)[1]*runif(10000)),
-  1+floor(dim(y)[2]*runif(10000)),
-  1+floor(dim(y)[3]*runif(10000))
-)] = NA
-y[seq(10)    ,1,] = NA
-y[seq(11, 20),2,] = NA
-y[seq(21, 30),3,] = NA
-y[seq(31, 40),4,] = NA
-y[seq(41, 50),5,] = NA
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_scale = X
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-############################################################################
-# test : some loc-var couples never observed in Y and some hallal NAs in X #
-############################################################################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[,,seq(50)] = NA
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_scale = X
-X[,,seq(50)] = NA
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-###########################################################################
-# test : some loc-var couples never observed in Y and some haram NAs in X #
-###########################################################################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[,,seq(50)] = NA
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_scale = X
-X[,,seq(100)] = NA
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-############################
-# test : one NA in X_scale #
-############################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_scale = X
-X_scale[1,1,1]=NA
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-
-
-##################################################################################
-# test : some loc-var couples never observed in Y and some hallal NAs in X_noise #
-##################################################################################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[,,seq(50)] = NA
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_noise[,,seq(50)] = NA
-X_scale = X
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-
-
-#################################################################################
-# test : some loc-var couples never observed in Y and some haram NAs in X_noise #
-#################################################################################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[,,seq(50)] = NA
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_noise[,,seq(100)] = NA
-X_scale = X
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-#################################################################################
-# test : some loc-var couples never observed in Y, only an intercept in X_noise #
-#################################################################################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[,,seq(50)] = NA
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_noise[,,seq(50)] = NA
-X_noise = X_noise[,1,,drop = F]
-X_scale = X
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
-
-#################################################################################
-# test : some loc-var couples never observed in Y, only an intercept in X_noise #
-#################################################################################
-y = array(dim = c(n_loc, n_var, n_time))
-dimnames(y) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("var", seq(n_var), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-y[] = rnorm(length(y))
-y[,,seq(50)] = NA
-
-y[,,seq(61, 70)] = NA
-
-X = array(dim = c(n_loc, 10, n_time))
-dimnames(X) = list(
-  paste("loc", seq(n_loc), sep = "_"), 
-  paste("covariate", seq(dim(X)[2]), sep = "_"), 
-  paste("time", seq(n_time), sep = "_")
-)
-X[] = rnorm(length(X))
-X[,1,] = 1
-X_noise = X
-X_noise[,,seq(50)] = NA
-X_noise = X_noise[,1,,drop = F]
-X_scale = X
-locs = matrix(runif(2*n_loc), n_loc)
-Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
-  y = y, locs = locs
-)
-mcmc_nngp_list = multivariate_NNGP_initialize(
-  y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)

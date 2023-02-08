@@ -382,7 +382,7 @@ expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_per
   
   res[-seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))] = unlist(side_blocks_rectangles)
   res[seq(ncol(covmat_previous_periods)), -seq(ncol(covmat_previous_periods))] = t(res[-seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))])
-  diag(res) = 1.0001
+  diag(res) = 1.00001
   res
 }
 

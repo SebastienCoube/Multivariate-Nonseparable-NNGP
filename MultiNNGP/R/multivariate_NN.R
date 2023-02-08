@@ -61,7 +61,9 @@ find_ordered_nn_multi <- function(locs_, m_whatever_closest, m_same_var, m_other
   
   # FNN::get.knnx has strange behavior for exact matches
   # so add a small amount of noise to each location
-  ee <- min(apply( locs_, 2, stats::sd ))
+  ee <- apply( locs_, 2, stats::sd )
+  ee = ee[ee!=0]
+  ee = min(ee)
   locs_ <- locs_ + matrix( ee*1e-4*stats::rnorm(n*ncol(locs_)), n, ncol(locs_) ) 
   
   # number of available parents of each variable
