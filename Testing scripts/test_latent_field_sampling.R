@@ -13,10 +13,10 @@ n_loc = 1000
 n_var = 3
 n_time = 1
 
-rho_vec = rep(.95, n_var*(n_var-1)/2)
+rho_vec = rep(.8, n_var*(n_var-1)/2)
 nu_vec = c(.5, 1.3, 2.5)
-a2_vec = c(10,20,30)
-locs = cbind(10*runif(n_loc), 1)
+a2_vec = c(10,100,1000)
+locs = cbind(1*runif(n_loc), 1)
 
 
 X = array(dim = c(n_loc, 1, 1))
@@ -44,14 +44,17 @@ vecchia_blocks = vecchia_block_approx(
 )
 
 
-y = array(dim = c(n_loc, n_var, 1))
-y[] = t(matrix(vecchia_blocks_solve(vecchia_blocks = vecchia_blocks, x = rnorm(n_loc*n_var), time_depth = 1),3))
-
-plot(locs[,1], y[,1,])
-points(locs[,1], y[,2,], col=2)
-points(locs[,1], y[,3,], col=3)
+y_true = array(dim = c(n_loc, n_var, 1))
+y_true[] = t(matrix(vecchia_blocks_solve(vecchia_blocks = vecchia_blocks, x = rnorm(n_loc*n_var), time_depth = 1),3))
 
 
+
+plot(rep(locs[,1],3), y_true, col = rep(seq(3), each = nrow(locs)), pch  = 16, cex = .5)
+
+y = y_true + .3*rnorm(length(y_true))
+y[sample(x = seq(length(y)), size = 300)] = NA
+
+plot(rep(locs[,1],3), y, col = rep(seq(3), each = nrow(locs)), pch  = 16, cex = .5)
 
 mcmc_nngp_list = multivariate_NNGP_initialize(
   y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
@@ -68,8 +71,73 @@ X_noise_list = mcmc_nngp_list$covariates$X_noise
 diag_precision_block = precision_blocks[[1]]
 useful_stuff = mcmc_nngp_list$useful_stuff
 
+latent_field = mcmc_nngp_list$chains$chain_1$params$field
+
+loc_subsetting = (locs[,1]>.5)
+plot(locs[,1], loc_subsetting)
+
 # subsetting locations
-loc_subset_idx = seq(useful_stuff$n_loc/2)
+for(i in unique(loc_subsetting))
+{
+  loc_subset_idx = which(loc_subsetting==i)
+  field_subset_idx = which(mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx  %in% loc_subset_idx)
+  a_posteriori_diag_precision_chols = get_a_posteriori_diag_precision_chols(
+      diag_precision_block, 
+      noise_info, 
+      X_noise_list, 
+      useful_stuff, 
+      loc_subset_idx, 
+      Vecchia_approx_DAG
+  )
+  a_posteriori_diag_precision = get_a_posteriori_diag_precision(
+      diag_precision_block, 
+      noise_info, 
+      X_noise_list, 
+      useful_stuff, 
+      seq(1000), 
+      Vecchia_approx_DAG
+  )
+  field_obs_precision = get_field_obs_precision(
+    noise_info, 
+    X_noise_list, 
+    useful_stuff, 
+    loc_subset_idx, 
+    Vecchia_approx_DAG, 
+    y = mcmc_nngp_list$y
+  )
+  
+  latent_field[field_subset_idx] = 
+  posterior_precision_solve_chol(
+  a_posteriori_diag_precision_chols = a_posteriori_diag_precision_chols, 
+  below_diag_precision_blocks = NULL, 
+  vecchia_blocks = vecchia_blocks, 
+  loc_subset_idx = loc_subset_idx, 
+  x = rnorm(field_subset_idx) + 
+    posterior_precision_solve_t_chol(
+    a_posteriori_diag_precision_chols = a_posteriori_diag_precision_chols, 
+    below_diag_precision_blocks = NULL, 
+    vecchia_blocks = vecchia_blocks, 
+    loc_subset_idx = loc_subset_idx, 
+    x = a_posteriori_diag_precision[[1]][field_subset_idx,-field_subset_idx]%*%latent_field[-field_subset_idx]
+    ) + 
+    
+  
+  )
+  
+  
+  
+  plot(rep(locs[,1],3), y, col = rep(seq(3), each = nrow(locs)), pch  = 16, cex = .5)
+  points(mcmc_nngp_list$locs[Vecchia_approx_DAG$field_position$location_idx, 1], latent_field,  col = Vecchia_approx_DAG$field_position$var_idx)
+  
+}
+
+
+
+
+
+
+
+
 
 
 

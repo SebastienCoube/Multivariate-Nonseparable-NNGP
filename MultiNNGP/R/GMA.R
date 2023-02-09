@@ -118,6 +118,7 @@ Matern = function(h, r, nu_)(r * h)^nu_ * besselK(r * h, nu_)
 
 get_lower_tri_idx = function(n_loc, diag = F)
 {
+  if(n_loc == 0)return(NULL)
   if(diag == F)
   {
     return(
@@ -375,7 +376,11 @@ expand_block_toeplitz_covmat = function(covmat_coeffs, block_lower_tri_idx, n_lo
 
 expand_full_covmat = function(covmat_previous_periods = NULL, covmat_current_period, side_blocks_rectangles = NULL)
 {
-  if(is.null(covmat_previous_periods)&is.null(side_blocks_rectangles))return(covmat_current_period)
+  if(is.null(covmat_previous_periods)&is.null(side_blocks_rectangles))
+  {
+    diag(covmat_current_period) = 1.00001
+    return(covmat_current_period)
+  }
   res = matrix(0, ncol(covmat_previous_periods)+ncol(covmat_current_period), ncol(covmat_previous_periods)+ncol(covmat_current_period))
   res[seq(ncol(covmat_previous_periods)), seq(ncol(covmat_previous_periods))] = covmat_previous_periods
   res[-seq(ncol(covmat_previous_periods)), -seq(ncol(covmat_previous_periods))] = covmat_current_period

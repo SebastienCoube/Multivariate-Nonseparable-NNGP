@@ -170,7 +170,11 @@ get_noise_info = function(X_noise_list, noise_beta, y_NA_possibilities_match, y_
   {
     tau_info_cases = lapply(
       split(y_NA_possibilities, row(y_NA_possibilities)), 
-      function(x)get_tau_info(mat_coordinates = rep(1, nrow(noise_beta))%*%noise_beta, y = x)
+      function(x)
+      {
+        x[x==F]=NA
+        get_tau_info(mat_coordinates = rep(1, nrow(noise_beta))%*%noise_beta, y = x)
+      }
     )
     expmat_and_derivatives = lapply(seq(dim(y)[1]), function(loc_index)
    {
@@ -364,15 +368,6 @@ multivariate_NNGP_initialize = function(
   }
   # removing unobserved stuff in Y
   all_na_idx = apply(y, c(1), function(x)all(is.na(x)))
-  if(any(all_na_idx))
-  {
-    message("some locations where y is always NA were removed")
-    all_na_idx = which(all_na_idx)
-    X = X[-all_na_idx,,,drop=F]
-    X_noise = X_noise[-all_na_idx,,,drop=F]
-    X_scale = X_scale[-all_na_idx,,,drop=F]
-    y = y[-all_na_idx,,,drop=F]
-  }
   #########################
   # Processing covariates #
   #########################
@@ -410,7 +405,7 @@ multivariate_NNGP_initialize = function(
   useful_stuff$non_na_count = apply(y, 2, function(x)sum(!is.na(x))) # number of non na obs per space-time position
   # possible configurations of na patterns in y
   useful_stuff$y_NA_possibilities = as.matrix(expand.grid(lapply(seq(dim(y)[2]), function(i)c(T,F))))#[-2^useful_stuff$n_var_y,]
-  useful_stuff$y_NA_possibilities_match = array_matrix_mult(is.na(y), matrix(2^seq(dim(y)[2]-1, 0)))[,1,]+1
+  useful_stuff$y_NA_possibilities_match = as.matrix(array_matrix_mult(is.na(y), matrix(2^seq(dim(y)[2]-1, 0)))[,1,])+1
   useful_stuff$lower_tri_idx = get_lower_tri_idx_DAG(Vecchia_approx_DAG$DAG) # lower triangular idx for Vecchia approx
   useful_stuff$var_idx = get_var_idx(Vecchia_approx_DAG$DAG, Vecchia_approx_DAG$field_position$var_idx) # lower triangular idx for Veccchia approx
   # var-loc couples of y where there is at least one observation in all time periods
