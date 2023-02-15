@@ -224,63 +224,64 @@ get_vecchia_blocks = function(DAG, coeffs, time_depth)
   }
   list(
     triangular_on_diag = triangular_on_diag,
-    rectangular_below_diag = rectangular_below_diag
+    rectangular_below_diag = rectangular_below_diag, 
+    time_depth = time_depth
   )
   
 }  
 
 # multiplication of a vector by the compressed repetitive sparse prior Chol
-vecchia_blocks_mult = function(x, vecchia_blocks, time_depth)
+vecchia_blocks_mult = function(x, vecchia_blocks)
 {
   # space only case
-  if(time_depth == 1)return(vecchia_blocks$triangular_on_diag %*% x)
+  if(vecchia_blocks$time_depth == 1)return(vecchia_blocks$triangular_on_diag %*% x)
   # putting vector in matrix
   x_ = matrix(x, nrow(vecchia_blocks$triangular_on_diag))
   # result matrix
   res = matrix(0, nrow(x_), ncol(x_))
   # first columns
-  res[,1:(time_depth-1)]=x_[,1:(time_depth-1)]
+  res[,1:(vecchia_blocks$time_depth-1)]=x_[,1:(vecchia_blocks$time_depth-1)]
   # multiplying current time blocks
-  res[,time_depth:ncol(res)] = as.matrix(vecchia_blocks$triangular_on_diag %*% x_[,time_depth:ncol(res)])
+  res[,vecchia_blocks$time_depth:ncol(res)] = as.matrix(vecchia_blocks$triangular_on_diag %*% x_[,vecchia_blocks$time_depth:ncol(res)])
   # multiplying previous time blocks
-  for(i in seq(time_depth-1)) res[,time_depth:ncol(res)] = res[,time_depth:ncol(res)] + as.matrix(vecchia_blocks$rectangular_below_diag[[i]] %*% x_[,seq(0, ncol(res)-time_depth)+i])
+  for(i in seq(vecchia_blocks$time_depth-1)) res[,vecchia_blocks$time_depth:ncol(res)] = res[,vecchia_blocks$time_depth:ncol(res)] + as.matrix(vecchia_blocks$rectangular_below_diag[[i]] %*% x_[,seq(0, ncol(res)-vecchia_blocks$time_depth)+i])
   c(res)
 }
 
 # multiplication of a vector by the compressed repetitive sparse prior Chol
-vecchia_blocks_t_mult = function(x, vecchia_blocks, time_depth)
+vecchia_blocks_t_mult = function(x, vecchia_blocks)
 {
   # putting vector in matrix
   x_ = matrix(x, nrow(vecchia_blocks$triangular_on_diag))
   # result matrix
   res = matrix(0, nrow(x_), ncol(x_))
   # first columns
-  res[,1:(time_depth-1)]=x_[,1:(time_depth-1)]
+  res[,1:(vecchia_blocks$time_depth-1)]=x_[,1:(vecchia_blocks$time_depth-1)]
   # multiplying current time blocks
-  res[,time_depth:ncol(res)] = as.matrix(t(x_[,time_depth:ncol(res)]) %*% vecchia_blocks$triangular_on_diag)
+  res[,vecchia_blocks$time_depth:ncol(res)] = as.matrix(t(x_[,vecchia_blocks$time_depth:ncol(res)]) %*% vecchia_blocks$triangular_on_diag)
   # multiplying previous time blocks
-  for(i in seq(time_depth-1)) res[,time_depth:ncol(res)] = res[,time_depth:ncol(res)] + t(as.matrix(t(x_[,seq(0, ncol(res)-time_depth)+i]) %*% vecchia_blocks$rectangular_below_diag[[i]]))
+  for(i in seq(vecchia_blocks$time_depth-1)) res[,vecchia_blocks$time_depth:ncol(res)] = res[,vecchia_blocks$time_depth:ncol(res)] + t(as.matrix(t(x_[,seq(0, ncol(res)-vecchia_blocks$time_depth)+i]) %*% vecchia_blocks$rectangular_below_diag[[i]]))
   c(res)
 }
 
 # solving of a linear by the compressed repetitive sparse prior Chol
-vecchia_blocks_solve = function(x, vecchia_blocks, time_depth)
+vecchia_blocks_solve = function(x, vecchia_blocks)
 {
   # space only case
-  if(time_depth==1)return(as.vector(Matrix::solve(vecchia_blocks$triangular_on_diag, x)))
+  if(vecchia_blocks$time_depth==1)return(as.vector(Matrix::solve(vecchia_blocks$triangular_on_diag, x)))
   # stacking x in  matrix
   x_ = matrix(x, nrow(vecchia_blocks$triangular_on_diag))
   # result
   res = matrix(0, nrow(x_), ncol(x_))
   # initializing result
-  res[,1:(time_depth-1)]=x_[,1:(time_depth-1)]
+  res[,1:(vecchia_blocks$time_depth-1)]=x_[,1:(vecchia_blocks$time_depth-1)]
   # solving recursively
-  for(i in seq(time_depth, ncol(x_)))
+  for(i in seq(vecchia_blocks$time_depth, ncol(x_)))
   {
     res[,i] = x_[,i]
     # triangular block matrix solve
-    for(j in seq(time_depth-1)) res[,i] = res[,i] - 
-        as.matrix(vecchia_blocks$rectangular_below_diag[[j]] %*% res[,i-time_depth+j])
+    for(j in seq(vecchia_blocks$time_depth-1)) res[,i] = res[,i] - 
+        as.matrix(vecchia_blocks$rectangular_below_diag[[j]] %*% res[,i-vecchia_blocks$time_depth+j])
     res[,i] = as.vector(Matrix::solve(vecchia_blocks$triangular_on_diag, res[,i]))
   }
   c(res)

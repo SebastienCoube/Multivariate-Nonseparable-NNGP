@@ -219,54 +219,55 @@ process_covariates = function(X, y)
 }
 
 
-make_simple_Vecchia_approx_DAG = 
-  function(
-    y, 
-    locs, 
-    m_same_var_same_time = 5, 
-    m_other_vars_same_time = 0, 
-    m_whatever_closest_same_time = 10, 
-    m_same_var_previous_times = 5, 
-    m_other_vars_previous_times = 0, 
-    m_whatever_closest_previous_times = 10
-  ){
-  # splitting y and loc in a loc-var format
-  var_tag = t(outer(rep(1, dim(y)[1]), seq(dim(y)[2])))
-  loc_idx = t(outer(seq(dim(y)[1]), rep(1, dim(y)[2])))
-  at_least_one_obs = t(!apply(y, c(1, 2), function(x)all(is.na(x)))) # loc - var pairs with at least one obs
-  locs_ = locs[loc_idx[at_least_one_obs],]# expanding
-  var_tag_ = var_tag[at_least_one_obs]
-  #
-  NNarray_same_time = find_ordered_nn_multi(
-    locs = locs_, 
-    var_tag = var_tag_, 
-    m_whatever_closest = m_whatever_closest_same_time,
-    m_same_var         = m_same_var_same_time,
-    m_other_vars       = m_other_vars_same_time,
-    lonlat = F)
-  NNarray_pevious_times = NULL
-  if(dim(y)[3]>1)NNarray_pevious_times = find_unordered_nn_multi(
-    locs = locs_, 
-    var_tag = var_tag_, 
-    m_whatever_closest = m_whatever_closest_previous_times, 
-    m_same_var = m_same_var_previous_times, 
-    m_other_vars = m_other_vars_previous_times, 
-    lonlat = F)
-  return(
-    list(
-      "DAG" = list(
-        "children" = lapply(seq(nrow(locs_)), function(x)x), 
-        "parents_same_time" = NNarray_same_time, 
-        "parents_previous_times" = NNarray_pevious_times 
-      ), 
-      field_position = list( # position of sampled w in the loc-var array 
-        "location_idx" = loc_idx[at_least_one_obs],
-        "var_idx" = var_tag[at_least_one_obs], 
-        "loc_match" = split(seq(length(loc_idx[at_least_one_obs])), loc_idx[at_least_one_obs])
-      )
-    )
-  )
-  }
+ make_simple_Vecchia_approx_DAG = 
+   function(
+     y, 
+     locs, 
+     m_same_var_same_time = 5, 
+     m_other_vars_same_time = 0, 
+     m_whatever_closest_same_time = 10, 
+     m_same_var_previous_times = 5, 
+     m_other_vars_previous_times = 0, 
+     m_whatever_closest_previous_times = 10
+   ){
+   # splitting y and loc in a loc-var format
+   var_tag = t(outer(rep(1, dim(y)[1]), seq(dim(y)[2])))
+   loc_idx = t(outer(seq(dim(y)[1]), rep(1, dim(y)[2])))
+   at_least_one_obs = t(!apply(y, c(1, 2), function(x)all(is.na(x)))) # loc - var pairs with at least one obs
+   locs_ = locs[loc_idx[at_least_one_obs],]# expanding
+   var_tag_ = var_tag[at_least_one_obs]
+   #
+   NNarray_same_time = find_ordered_nn_multi(
+     locs = locs_, 
+     var_tag = var_tag_, 
+     m_whatever_closest = m_whatever_closest_same_time,
+     m_same_var         = m_same_var_same_time,
+     m_other_vars       = m_other_vars_same_time,
+     lonlat = F)
+   NNarray_pevious_times = NULL
+   if(dim(y)[3]>1)NNarray_pevious_times = find_unordered_nn_multi(
+     locs = locs_, 
+     var_tag = var_tag_, 
+     m_whatever_closest = m_whatever_closest_previous_times, 
+     m_same_var = m_same_var_previous_times, 
+     m_other_vars = m_other_vars_previous_times, 
+     lonlat = F)
+   return(
+     list(
+       "DAG" = list(
+         "children" = lapply(seq(nrow(locs_)), function(x)x), 
+         "parents_same_time" = NNarray_same_time, 
+         "parents_previous_times" = NNarray_pevious_times 
+       ), 
+       field_position = list( # position of sampled w in the loc-var array 
+         "location_idx" = loc_idx[at_least_one_obs],
+         "var_idx" = var_tag[at_least_one_obs], 
+         "loc_match" = split(seq(length(loc_idx[at_least_one_obs])), loc_idx[at_least_one_obs])
+       )
+     )
+   )
+   }
+
 
 ### Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
 ###   y = y, locs = locs
@@ -359,6 +360,8 @@ multivariate_NNGP_initialize = function(
   if(any((apply(y, c(1, 3), anyNA)==F)&(apply(X, c(1, 3), anyNA)==T)))stop("X should have no NAs where y has no NAs (but it is possible, and even recommended, for X to have observations even where y has NAs)")
   if(any((apply(y, c(1, 3), anyNA)==F)&(apply(X_noise, c(1, 3), anyNA)==T)))stop("X_noise should have no NAs where y has no NAs")
   if(any(is.na(X_scale)))stop("X_scale can have no NA")
+  # checking Vecchia DAG
+  if(is.null(Vecchia_approx_DAG$DAG$parents_previous_times) & (dim(y)[3]>1))stop("Vecchia_approx_DAG has been made with option `time_depth = 1` while y has more than one time period")
   ###################
   # some processing #
   ###################
@@ -375,8 +378,8 @@ multivariate_NNGP_initialize = function(
   if(dim(y)[3]>1){
     X =       abind::abind(array(123456 , c(dim(X)      [c(1,2)], 5*time_depth)), X,       along = 3)
     X_scale = abind::abind(array(123456 , c(dim(X_scale)[c(1,2)], 5*time_depth)), X_scale, along = 3)
-    X_noise = abind::abind(array(NA, c(dim(X_noise)[c(1,2)], 5*time_depth)), X_noise, along = 3)
-    y =       abind::abind(array(NA , c(dim(y)      [c(1,2)], 5*time_depth)), y,       along = 3)
+    X_noise = abind::abind(array(NA,      c(dim(X_noise)[c(1,2)], 5*time_depth)), X_noise, along = 3)
+    y =       abind::abind(array(NA ,     c(dim(y)      [c(1,2)], 5*time_depth)), y,       along = 3)
   }
   covariates = 
     parallel::mcmapply(process_covariates, list(X, X_noise, X_scale), list(y,y,y), SIMPLIFY = F)
@@ -393,8 +396,9 @@ multivariate_NNGP_initialize = function(
   useful_stuff = list()
   useful_stuff$n_loc = nrow(locs)
   useful_stuff$time_depth = time_depth
-  useful_stuff$buffer_depth  =5*time_depth
+  useful_stuff$buffer_depth  = (5*time_depth)*(time_depth!=1)
   useful_stuff$y_split = apply(y, c(1, 3), c, simplify = F) # split  by time and loc for density computation
+  useful_stuff$y_na_killed = y; useful_stuff$y_na_killed[is.na(useful_stuff$y_na_killed)] = 0
   useful_stuff$non_na_y = apply(y, c(1, 3), function(x)which(!is.na(x)), simplify = F) 
   useful_stuff$n_var_y = dim(y)[2] # number of variables in y
   useful_stuff$n_var_X = dim(X)[2] # ...

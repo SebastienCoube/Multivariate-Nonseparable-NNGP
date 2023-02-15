@@ -1,3 +1,5 @@
+
+posterior_precision_solve_chol : precision bits missing + check conformity with t solve
 # Idea of field sampling: update all time periods of one cluster of spatial locations + the buffer at the beginning
 
 
@@ -111,7 +113,7 @@ get_a_posteriori_diag_precision_chols = function(
   # indices of additional precision due to observations
   additional_precision_indices = do.call(
     rbind, 
-    lapply(seq(length(loc_subset_idx)-1), function(j)
+    lapply(seq(length(loc_subset_idx)), function(j)
       cumsum_n_field_per_site_subset[j] + 
         get_lower_tri_idx(n_field_per_site_subset[j], diag = T)))
   additional_precision_i = additional_precision_indices[,1]
@@ -230,18 +232,26 @@ posterior_precision_solve_chol = function(
   x_buffer   = matrix(x_buffer,   nrow(below_diag_precision_blocks[[1]]))
   x_observed = matrix(x_observed, nrow(a_posteriori_diag_precision_chols[[1]]))
   # begining the solving with the buffer
-  x_buffer = vecchia_blocks_solve(x_buffer, vecchia_blocks = vecchia_blocks, time_depth = length(precision_blocks)-1)
+  x_buffer = vecchia_blocks_solve(x_buffer, vecchia_blocks = vecchia_blocks)
+  # begining the solving with the buffer
+  for(i in seq(min(length(below_diag_precision_blocks_subset), ncol(x_observed)) ))
+  {
+    x_observed[,i] = x_observed[,i]
+  }
   # using block solve formula, starting from top
   for(i in seq(ncol(x_observed))){
     # multiplying previously computed elements by blocks above the diag
     for(j in seq(length(below_diag_precision_blocks_subset)))
-    # solving by lower tri blocks on the diag
-    x_observed[,i] = as.vector(
-      Matrix::t(as(a_posteriori_diag_precision_chols[[i]], "pMatrix")) %*%
-      Matrix::solve(
-      Matrix::t(as(a_posteriori_diag_precision_chols[[i]], "Matrix")), 
-      x_observed[,i]
-      ))
+    {
+      
+      # solving by lower tri blocks on the diag
+      x_observed[,i] = as.vector(
+        Matrix::t(as(a_posteriori_diag_precision_chols[[i]], "pMatrix")) %*%
+          Matrix::solve(
+            Matrix::t(as(a_posteriori_diag_precision_chols[[i]], "Matrix")), 
+            x_observed[,i]
+          ))
+    }
   }
   c(x_buffer, x_observed)
 }
@@ -285,7 +295,7 @@ posterior_precision_solve_t_chol = function(
    as.matrix(x_buffer[,seq(ncol(x_buffer)-length(below_diag_precision_blocks)+j, ncol(x_buffer))] + 
      below_diag_precision_blocks_cross [[j]] %*% x_observed[,seq(length(below_diag_precision_blocks)-j+1)])
  }
-  x_buffer = vecchia_blocks_solve(x_buffer, vecchia_blocks = vecchia_blocks, time_depth = length(precision_blocks)-1)
+  x_buffer = vecchia_blocks_solve(x_buffer, vecchia_blocks = vecchia_blocks)
   c(x_buffer, x_observed)
 }
 
@@ -350,13 +360,19 @@ get_field_obs_precision = function(
   n_field_per_site_subset = unlist(useful_stuff$n_field_per_site[loc_subset_idx])
   cumsum_n_field_per_site_subset = cumsum(c(0, n_field_per_site_subset))
   # indices of additional precision due to observations
-  additional_precision_indices = do.call(rbind, lapply(seq(length(loc_subset_idx)), function(j)cumsum_n_field_per_site_subset[j] + 
-                                                         cbind(
-                                                           c(outer(seq(   n_field_per_site_subset[j]), rep(1, dim(y)[2]))), 
-                                                           c(outer(rep(1, n_field_per_site_subset[j]), seq(   dim(y)[2]))) 
-                                                           )))
-  additional_precision_i = additional_precision_indices[,1]
-  additional_precision_j = additional_precision_indices[,2]
+  additional_precision_indices = do.call(rbind, lapply(seq(length(loc_subset_idx)), function(j)
+    {
+    if(n_field_per_site_subset[j]==0)return(matrix(0, 0, 2))
+     
+      cbind(
+        cumsum_n_field_per_site_subset[j] + c(outer(seq(   n_field_per_site_subset[j]), rep(1, dim(y)[2]))), 
+        dim(y)[2]*(j-1) + c(outer(rep(1, n_field_per_site_subset[j]), seq(   dim(y)[2]))) 
+      )
+    }
+    )
+    )
+ additional_precision_i = additional_precision_indices[,1]
+ additional_precision_j = additional_precision_indices[,2]
   # time periods
   k = 1
   if(useful_stuff$n_time_periods>1) k = seq(useful_stuff$buffer_depth+1, useful_stuff$n_time_periods)
@@ -369,22 +385,25 @@ get_field_obs_precision = function(
         additional_precision_x = 
           unlist(lapply(seq(length(loc_subset_idx)), function(j)
           {
+            print(j)
+            if(n_field_per_site_subset[j]==0)return(NULL)
+            # creating matrix of 0 whose size corresponds to the number of latent field occurences at the selected location
+            # filling the matrix with noise precision, at the indices corresponding to observed variables
+            # eg: variables 1, 2, 4 are observed at site s. So tau_precision will have size 3*3. 
+            # But at time t, only variables 1 and 4 are observed. So tau_precision will look like: 
+            #    ?  0  ?
+            #    0  0  0
+            #    ?  0  ?
             tau_precision = matrix(0, n_field_per_site_subset[j], dim(y)[2])
-            if(length(useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]])>0)
-            {
-              # creating matrix of 0 whose size corresponds to the number of latent field occurences at the selected location
-              # filling the matrix with noise precision, at the indices corresponding to observed variables
-              # eg: variables 1, 2, 4 are observed at site s. So tau_precision will have size 3*3. 
-              # But at time t, only variables 1 and 4 are observed. So tau_precision will look like: 
-              #    ?  0  ?
-              #    0  0  0
-              #    ?  0  ?
-              tau_precision[,useful_stuff$y_at_least_one_obs[[i]]][useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]],useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]]] = noise_info[[loc_subset_idx[[j]]]][[i]]$tau_precision
-            }
+            ##if(length(useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]])>1)
+            #{
+              #tau_precision[,useful_stuff$y_at_least_one_obs[[loc_subset_idx[j]]], drop = F][useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]],useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]]] = c(noise_info[[loc_subset_idx[[j]]]][[i]]$tau_precision)
+              tau_precision[useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]] , seq(ncol(tau_precision))[useful_stuff$y_at_least_one_obs[[loc_subset_idx[j]]]] [useful_stuff$position_in_y_at_least_one_obs[[i]][[loc_subset_idx[j]]]] ] = c(noise_info[[loc_subset_idx[[j]]]][[i]]$tau_precision)
+            #}
+            
             c(tau_precision)
           }))
         Matrix::sparseMatrix(
-          symmetric = T,
           i = c(additional_precision_i),
           j = c(additional_precision_j), 
           x = c(additional_precision_x)

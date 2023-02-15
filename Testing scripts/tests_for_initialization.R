@@ -41,6 +41,7 @@ Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
 mcmc_nngp_list = multivariate_NNGP_initialize(
   y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
 
+dim(mcmc_nngp_list$chains$chain_1$stuff$vecchia$triangular_on_diag)
 ###################################################
 # test : some loc-var couples never observed in Y #
 ###################################################
@@ -78,6 +79,7 @@ Vecchia_approx_DAG = make_simple_Vecchia_approx_DAG(
 )
 mcmc_nngp_list = multivariate_NNGP_initialize(
   y = y, locs = locs, X = X, X_noise = X_noise, X_scale = X_scale, Vecchia_approx_DAG = Vecchia_approx_DAG, n_chains = 2)
+dim(mcmc_nngp_list$chains$chain_1$stuff$vecchia$triangular_on_diag)
 
 ############################################################################
 # test : some loc-var couples never observed in Y and some hallal NAs in X #
