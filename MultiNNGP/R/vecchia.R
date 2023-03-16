@@ -1,51 +1,51 @@
 
-#### # flip image function to match matrix
-#### my_image = function(m)image(t(m)[,nrow(m):1])
-#### 
-#### # simulate data
-#### set.seed(2)
-#### 
-#### n_var = 8
-#### time_depth = 4
-#### 
-#### # spatial locations and variable index
-#### locs_ = as.matrix(expand.grid(seq(100), seq(100)))/20#cbind(runif(n_loc), runif(n_loc))
-#### locs_ = locs_ + rnorm(length(locs_), 0, .0001)
-#### locs_ = locs_[sample(seq(nrow(locs_)), size = nrow(locs_), F),]
-#### n_loc =nrow(locs_)
-#### row.names(locs_) = seq(n_loc)
-#### var_tag = ceiling(n_var*runif(n_loc));var_tag = match(var_tag, unique(var_tag))
-#### 
-#### # covariance params
-#### rho = GpGp::exponential_isotropic(c(1, 1, 0), matrix(rnorm(2*n_var), n_var))
-#### rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
-#### a2_vec = rep(100, n_var)#.000001*runif(n_var)
-#### nu_vec = .5 + 2*runif(n_var)
-#### alpha = .01 * runif(1)
-#### a = runif(1) 
-#### b = runif(1) 
-#### cc = 1*runif(1) 
-#### lambda = runif(1) 
-#### delta = runif(1) 
-#### r = 1 * runif(1) 
-#### A_vec = rep(0, n_var)#runif(n_var)
-#### u = seq(0, time_depth-1)
-#### 
-#### # creating the DAG
-#### NNarray_same_time = find_ordered_nn_multi(locs_ = locs_, 
-####                                           var_tag = var_tag, 
-####                                           m_whatever_closest = 10, m_same_var = 5, m_other_vars = 0, 
-####                                           lonlat = F)
-#### NNarray_pevious_times = find_unordered_nn_multi(locs_ = locs_, 
-####                                                 var_tag = var_tag, 
-####                                                 m_whatever_closest = 10, m_same_var = 5, m_other_vars = 0, 
-####                                                 lonlat = F)
-#### DAG = list(
-####   "children" = lapply(seq(n_loc), function(x)x), 
-####   "parents_same_time" = NNarray_same_time, 
-####   "parents_previous_times" = NNarray_pevious_times 
-#### )
-#### 
+### # flip image function to match matrix
+### my_image = function(m)image(t(m)[,nrow(m):1])
+### 
+### # simulate data
+### set.seed(2)
+### 
+### n_var = 8
+### time_depth = 4
+### 
+### # spatial locations and variable index
+### locs_ = as.matrix(expand.grid(seq(10), seq(10)))/20#cbind(runif(n_loc), runif(n_loc))
+### locs_ = locs_ + rnorm(length(locs_), 0, .0001)
+### locs_ = locs_[sample(seq(nrow(locs_)), size = nrow(locs_), F),]
+### n_loc =nrow(locs_)
+### row.names(locs_) = seq(n_loc)
+### var_tag = ceiling(n_var*runif(n_loc));var_tag = match(var_tag, unique(var_tag))
+### 
+### # covariance params
+### rho = GpGp::exponential_isotropic(c(1, 1, 0), matrix(rnorm(2*n_var), n_var))
+### rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
+### a2_vec = rep(100, n_var)#.000001*runif(n_var)
+### nu_vec = .5 + 2*runif(n_var)
+### alpha = .01 * runif(1)
+### a = runif(1) 
+### b = runif(1) 
+### cc = 1*runif(1) 
+### lambda = runif(1) 
+### delta = runif(1) 
+### r = 1 * runif(1) 
+### A_vec = rep(0, n_var)#runif(n_var)
+### u = seq(0, time_depth-1)
+
+### # creating the DAG
+### NNarray_same_time = find_ordered_nn_multi(locs_ = locs_, 
+###                                          var_tag = var_tag, 
+###                                          m_whatever_closest = 10, m_same_var = 5, m_other_vars = 0, 
+###                                          lonlat = F)
+### NNarray_pevious_times = find_unordered_nn_multi(locs_ = locs_, 
+###                                                var_tag = var_tag, 
+###                                                m_whatever_closest = 10, m_same_var = 5, m_other_vars = 0, 
+###                                                lonlat = F)
+### DAG = list(
+###  "children" = lapply(seq(n_loc), function(x)x), 
+###  "parents_same_time" = NNarray_same_time, 
+###  "parents_previous_times" = NNarray_pevious_times 
+### )
+
 
 # get lower triangular indices in the dag
 get_lower_tri_idx_DAG = function(DAG)
@@ -81,17 +81,17 @@ get_var_idx = function(DAG, var_tag)
   var_idx
 }
 
-##### lower_tri_idx_DAG = get_lower_tri_idx_DAG(DAG)
-##### var_idx = get_var_idx(DAG, var_tag = var_tag)
-##### # Pre-computing range and multiplier
-##### multiplier = get_multiplier(
-#####   a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
-#####   r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, u = u
-##### )
-##### effective_range = get_effective_range(
-#####   a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
-#####   r = r, A_vec = A_vec, a2_vec = a2_vec, u = u
-##### )
+### lower_tri_idx_DAG = get_lower_tri_idx_DAG(DAG)
+### var_idx = get_var_idx(DAG, var_tag = var_tag)
+### # Pre-computing range and multiplier
+### multiplier = get_multiplier(
+###  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+###  r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, u = u
+### )
+### effective_range = get_effective_range(
+###  a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+###  r = r, A_vec = A_vec, a2_vec = a2_vec, u = u
+### )
 
 get_linv_coeffs = function(
     locs_, var_tag, 
@@ -185,16 +185,17 @@ get_linv_coeffs = function(
   res
 }
 
-##### Linv_coeffs = get_linv_coeffs(
-#####   DAG = DAG, locs_ = locs_, 
-#####   lower_tri_idx_DAG = lower_tri_idx_DAG, 
-#####   var_idx = var_idx, 
-#####   var_tag = var_tag, 
-#####   multiplier = multiplier, 
-#####   effective_range = effective_range, 
-#####   rho_vec = rho_vec)
-##### 
-##### coeffs = Linv_coeffs
+### Linv_coeffs = get_linv_coeffs(
+###  DAG = DAG, locs_ = locs_, 
+###  lower_tri_idx_DAG = lower_tri_idx_DAG, 
+###  var_idx = var_idx, 
+###  var_tag = var_tag, 
+###  multiplier = multiplier, 
+###  effective_range = effective_range, 
+###  rho_vec = rho_vec, 
+###  nu_vec = nu_vec)
+### 
+### coeffs = Linv_coeffs
 
 get_vecchia_blocks = function(DAG, coeffs, time_depth)
 {
@@ -258,9 +259,10 @@ vecchia_blocks_t_mult = function(x, vecchia_blocks)
   # first columns
   res[,1:(vecchia_blocks$time_depth-1)]=x_[,1:(vecchia_blocks$time_depth-1)]
   # multiplying current time blocks
-  res[,vecchia_blocks$time_depth:ncol(res)] = as.matrix(t(x_[,vecchia_blocks$time_depth:ncol(res)]) %*% vecchia_blocks$triangular_on_diag)
+  res[,vecchia_blocks$time_depth:ncol(res)] = as.matrix(Matrix::t(vecchia_blocks$triangular_on_diag) %*% x_[,vecchia_blocks$time_depth:ncol(res)])
   # multiplying previous time blocks
-  for(i in seq(vecchia_blocks$time_depth-1)) res[,vecchia_blocks$time_depth:ncol(res)] = res[,vecchia_blocks$time_depth:ncol(res)] + t(as.matrix(t(x_[,seq(0, ncol(res)-vecchia_blocks$time_depth)+i]) %*% vecchia_blocks$rectangular_below_diag[[i]]))
+  for(i in seq(vecchia_blocks$time_depth-1)) res[,seq(vecchia_blocks$time_depth-i, ncol(res)-i)] = res[,seq(time_depth-i, ncol(res)-i)] + 
+    as.matrix(Matrix::t(vecchia_blocks$rectangular_below_diag[[vecchia_blocks$time_depth-i]]) %*%  x_[,seq(time_depth, ncol(res))])
   c(res)
 }
 
@@ -287,22 +289,70 @@ vecchia_blocks_solve = function(x, vecchia_blocks)
   c(res)
 }
 
+# solving of a linear by the compressed repetitive sparse prior Chol
+vecchia_blocks_t_solve = function(x, vecchia_blocks)
+{
+  # space only case
+  if(vecchia_blocks$time_depth==1)return(as.vector(Matrix::solve(Matrix::t(vecchia_blocks$triangular_on_diag), x)))
+  # stacking x in  matrix
+  x_ = matrix(x, nrow(vecchia_blocks$triangular_on_diag))
+  # result
+  res = x_
+  # solving recursively, starting from bottom
+  for(i in seq(ncol(x_), vecchia_blocks$time_depth))
+  {
+    # triangular block matrix solve
+    res[,i] = as.vector(Matrix::solve(Matrix::t(vecchia_blocks$triangular_on_diag), res[,i]))
+    # propagating 
+    for(j in seq(vecchia_blocks$time_depth-1)) res[,i-j] = res[,i-j] - 
+        as.matrix(Matrix::t(vecchia_blocks$rectangular_below_diag[[vecchia_blocks$time_depth-j]]) %*% res[,i])
+  }
+  c(res)
+}
 
 
-##### vecchia_blocks = get_vecchia_blocks(DAG, coeffs, time_depth)  
-##### 
-##### # checking t mult and mult
-##### x1 = rnorm(100*n_loc)
-##### x2 = rnorm(100*n_loc)
-##### vecchia_blocks_t_mult(x1, vecchia_blocks, time_depth)*x2 - 
-#####   vecchia_blocks_mult(x2, vecchia_blocks, time_depth)*x1
-##### 
-##### # checking solve and mult
-##### x = rnorm(1000*n_loc)
-##### x - vecchia_blocks_mult(vecchia_blocks_solve(x, vecchia_blocks, time_depth), vecchia_blocks, time_depth)
-##### 
-##### x = rnorm(100*n_loc)
-##### w = vecchia_blocks_solve(x, vecchia_blocks, time_depth)
+
+### vecchia_blocks = get_vecchia_blocks(DAG, coeffs, time_depth)  
+### 
+### # checking t mult and mult
+### x1 = rnorm(5*n_loc)
+### x2 = rnorm(5*n_loc)
+### sum(vecchia_blocks_t_mult(x1, vecchia_blocks)*x2)-
+### sum(vecchia_blocks_mult(x2, vecchia_blocks)*x1)
+### 
+### M = matrix(0, 500, 500)
+###  for(i in seq(500))
+###  {
+###    x = rep(0, 500)
+###    x[i]=1
+###    M[,i] = vecchia_blocks_mult(x, vecchia_blocks)
+###  }
+### MT = matrix(0, 500, 500)
+###  for(i in seq(500))
+###  {
+###    x = rep(0, 500)
+###    x[i]=1
+###    MT[,i] = vecchia_blocks_t_mult(x, vecchia_blocks)
+###  }
+### 
+### sum(abs(MT-t(M)))
+### my_image((MT-t(M))!=0)
+### my_image((MT)!=0)
+### my_image((M)!=0)
+### 
+### 
+### 
+### 
+### # checking solve and mult
+### x = rnorm(1000*n_loc)
+### x - vecchia_blocks_mult(vecchia_blocks_solve(x, vecchia_blocks), vecchia_blocks)
+### x = rnorm(1000*n_loc)
+### x - vecchia_blocks_t_mult(vecchia_blocks_t_solve(x, vecchia_blocks), vecchia_blocks)
+### 
+### 
+### 
+### x = rnorm(100*n_loc)
+### w = vecchia_blocks_solve(x, vecchia_blocks)
 
 
 

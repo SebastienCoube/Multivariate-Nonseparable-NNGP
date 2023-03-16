@@ -333,7 +333,8 @@ for(i in unique(loc_subsetting))
       below_diag_precision_blocks = precision_blocks[-1], 
       vecchia_blocks = vecchia_blocks, 
       loc_subset_idx = loc_subset_idx, 
-      x = rnorm(
+      x = 
+        rnorm(
         mcmc_nngp_list$useful_stuff$n_field * mcmc_nngp_list$useful_stuff$buffer_depth + 
           length(field_subset_idx)*(mcmc_nngp_list$useful_stuff$n_time_periods-mcmc_nngp_list$useful_stuff$buffer_depth)
       )  # normal sample following conditional variance
@@ -344,8 +345,8 @@ for(i in unique(loc_subsetting))
           vecchia_blocks = vecchia_blocks, 
           loc_subset_idx = loc_subset_idx, 
           x = # QAB XB-muB
-            #info_from_rest_field - 
-            info_from_y 
+            #info_from_rest_field
+            - info_from_y 
         )
     )
   mcmc_nngp_list$chains$chain_1$params$field  = matrix(tatato, mcmc_nngp_list$useful_stuff$n_field)
@@ -357,8 +358,6 @@ for(i in unique(loc_subsetting))
   points(mcmc_nngp_list$locs[Vecchia_approx_DAG$field_position$location_idx, 1], mcmc_nngp_list$chains$chain_1$params$field[,125],  col = Vecchia_approx_DAG$field_position$var_idx, pch = 3, cex = .3)
   plot(rep(locs_no_na[,1],3), y_true[,,150], col = rep(seq(3), each = nrow(locs_no_na)), pch  = 16, cex = .2)
   points(mcmc_nngp_list$locs[Vecchia_approx_DAG$field_position$location_idx, 1], mcmc_nngp_list$chains$chain_1$params$field[,175],  col = Vecchia_approx_DAG$field_position$var_idx, pch = 3, cex = .3)
-  
-  
 }
 
 

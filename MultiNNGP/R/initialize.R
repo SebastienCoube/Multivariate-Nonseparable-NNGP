@@ -184,6 +184,8 @@ get_noise_info = function(X_noise_list, noise_beta, y_NA_possibilities_match, y_
      })
    })
   }
+  names(expmat_and_derivatives) = paste("loc_", seq(length(expmat_and_derivatives)), sep = "")
+  for(x in expmat_and_derivatives)names(x)=paste("time_", seq(length(x)), sep = "")
   return(expmat_and_derivatives)
 }
 

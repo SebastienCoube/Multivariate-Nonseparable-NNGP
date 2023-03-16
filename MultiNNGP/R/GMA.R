@@ -55,13 +55,13 @@ get_multiplier = function(
       )
     ) / (
       (
-        outer((1 + (cc*u)^(2*a)     )^  delta,  rep(1, length(A_))) - 
+          outer((1 + (cc*u)^(2*a)     )^  delta,  rep(1, length(A_))) - 
           outer((1 + (r *u)^(2*lambda))^(-delta), A_                )
       )
       * 
         (
           outer((1 + (cc*u)^(2*a)     )^  b,  rep(1, length(A_))) - 
-            outer((1 + (r *u)^(2*lambda))^(-b), A_                )
+          outer((1 + (r *u)^(2*lambda))^(-b), A_                )
         )
     )
   row.names(res) = paste("u=", u, sep="")
