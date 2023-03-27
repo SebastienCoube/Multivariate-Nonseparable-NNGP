@@ -289,23 +289,34 @@ vecchia_blocks_solve = function(x, vecchia_blocks)
   c(res)
 }
 
+
+#transposes Vecchia blocks one time before solving
+vecchia_blocks_t = function(vecchia_blocks)
+{
+  vecchia_blocks$triangular_on_diag = Matrix::t(vecchia_blocks$triangular_on_diag)
+  vecchia_blocks$rectangular_below_diag = lapply(vecchia_blocks$rectangular_below_diag, Matrix::t)
+  names(vecchia_blocks)[match("triangular_on_diag", names(vecchia_blocks))] = "t_triangular_on_diag"
+  names(vecchia_blocks)[match("rectangular_below_diag", names(vecchia_blocks))] = "t_rectangular_below_diag"
+  vecchia_blocks
+}
+
 # solving of a linear by the compressed repetitive sparse prior Chol
-vecchia_blocks_t_solve = function(x, vecchia_blocks)
+vecchia_blocks_t_solve = function(x, transposed_vecchia_blocks)
 {
   # space only case
-  if(vecchia_blocks$time_depth==1)return(as.vector(Matrix::solve(Matrix::t(vecchia_blocks$triangular_on_diag), x)))
+  if(vecchia_blocks$time_depth==1)return(as.vector(Matrix::solve(vecchia_blocks$t_triangular_on_diag, x)))
   # stacking x in  matrix
-  x_ = matrix(x, nrow(vecchia_blocks$triangular_on_diag))
+  x_ = matrix(x, nrow(vecchia_blocks$t_triangular_on_diag))
   # result
   res = x_
   # solving recursively, starting from bottom
   for(i in seq(ncol(x_), vecchia_blocks$time_depth))
   {
     # triangular block matrix solve
-    res[,i] = as.vector(Matrix::solve(Matrix::t(vecchia_blocks$triangular_on_diag), res[,i]))
+    res[,i] = as.vector(Matrix::solve(vecchia_blocks$t_triangular_on_diag, res[,i]))
     # propagating 
     for(j in seq(vecchia_blocks$time_depth-1)) res[,i-j] = res[,i-j] - 
-        as.matrix(Matrix::t(vecchia_blocks$rectangular_below_diag[[vecchia_blocks$time_depth-j]]) %*% res[,i])
+        as.matrix(vecchia_blocks$t_rectangular_below_diag[[vecchia_blocks$time_depth-j]] %*% res[,i])
   }
   c(res)
 }

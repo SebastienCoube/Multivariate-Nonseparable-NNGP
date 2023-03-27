@@ -414,7 +414,7 @@ multivariate_NNGP_initialize = function(
   useful_stuff$y_NA_possibilities_match = as.matrix(array_matrix_mult(is.na(y), matrix(2^seq(dim(y)[2]-1, 0)))[,1,])+1
   useful_stuff$lower_tri_idx = get_lower_tri_idx_DAG(Vecchia_approx_DAG$DAG) # lower triangular idx for Vecchia approx
   useful_stuff$var_idx = get_var_idx(Vecchia_approx_DAG$DAG, Vecchia_approx_DAG$field_position$var_idx) # lower triangular idx for Veccchia approx
-  # var-loc couples of y where there is at least one observation in all time periods
+###  # var-loc couples of y where there is at least one observation in all time periods
   useful_stuff$y_at_least_one_obs = apply(y, c(1, 2), function(x)!all(is.na(x))); useful_stuff$y_at_least_one_obs = split(useful_stuff$y_at_least_one_obs, row(useful_stuff$y_at_least_one_obs)) # loc - var pairs with at least one obs
   useful_stuff$n_field_per_site = lapply(useful_stuff$y_at_least_one_obs, sum)# number of latent field variables simulated per spatial site
   # position of current observation in the var-loc couples of y where there is at least one observation in all time periods
@@ -430,6 +430,28 @@ multivariate_NNGP_initialize = function(
     },
     simplify = F
     )
+  useful_stuff$y_loc_var_format = t(mapply(function(i, j)y[i,j,], i = Vecchia_approx_DAG$field_position$location_idx, j = Vecchia_approx_DAG$field_position$var_idx))
+  useful_stuff$y_loc_var_format_no_NA = useful_stuff$y_loc_var_format; useful_stuff$y_loc_var_format_no_NA[is.na(useful_stuff$y_loc_var_format_no_NA)]=0
+  useful_stuff$noise_precision_i = lapply(
+    seq(useful_stuff$n_time_periods), function(i_time)
+      unlist(lapply(
+        seq(useful_stuff$n_loc), function(i_loc){
+          tatato = Vecchia_approx_DAG$field_position$loc_match[[i_loc]][useful_stuff$position_in_y_at_least_one_obs[[i_time]][[i_loc]]]
+          rep(tatato, length(tatato))
+        }
+      ))
+  )
+  useful_stuff$noise_precision_j = lapply(
+    seq(useful_stuff$n_time_periods), function(i_time)
+      unlist(lapply(
+        seq(useful_stuff$n_loc), function(i_loc){
+          tatato = Vecchia_approx_DAG$field_position$loc_match[[i_loc]][useful_stuff$position_in_y_at_least_one_obs[[i_time]][[i_loc]]]
+          rep(tatato, each = length(tatato))
+        }
+      ))
+  )
+  
+  
   
   ######################
   # Hierarchical model #
@@ -475,7 +497,7 @@ multivariate_NNGP_initialize = function(
     chains[[i]]$params$beta       = matrix(0, useful_stuff$n_var_X      , useful_stuff$n_var_y)                           ; chains[[i]]$params$beta      [] = rnorm(length(chains[[i]]$params$beta      ))
     chains[[i]]$params$range      = matrix(runif(useful_stuff$n_var_y, min = hierarchical_model$range_prior[,1],      max = hierarchical_model$range_prior[,2]))
     chains[[i]]$params$smoothness = matrix(runif(useful_stuff$n_var_y, min = hierarchical_model$smoothness_prior[,1], max = hierarchical_model$smoothness_prior[,2]))
-    chains[[i]]$params$field = matrix(0, useful_stuff$n_time_periods, useful_stuff$n_field)
+    chains[[i]]$params$field = matrix(0, useful_stuff$n_field, useful_stuff$n_time_periods)
     rho = GpGp::exponential_isotropic(c(1, 1, 0), matrix(rnorm(2*useful_stuff$n_var_y), useful_stuff$n_var_y))
     chains[[i]]$params$rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
     chains[[i]]$params$a2_vec = 1/runif(nrow(hierarchical_model$range_prior), min = hierarchical_model$range_prior[,1], max = hierarchical_model$range_prior[,2])

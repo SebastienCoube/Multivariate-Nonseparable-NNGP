@@ -58,6 +58,15 @@ field_obs_precision_mult = function(
   res_
 }
 
+z = mcmc_nngp_list$y
+field_obs_precision_mult(
+    noise_info, 
+    X_noise_list, 
+    useful_stuff, 
+    Vecchia_approx_DAG, 
+    z
+)
+
 # a priori whitened gradient, that is design matrix equal to prior covariance
 
 latent_field_grad = function(
