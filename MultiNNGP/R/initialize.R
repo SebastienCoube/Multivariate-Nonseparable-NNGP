@@ -376,12 +376,19 @@ multivariate_NNGP_initialize = function(
   #########################
   # Processing covariates #
   #########################
-  # adding buffer
+  # adding buffer at the beginning
   if(dim(y)[3]>1){
     X =       abind::abind(array(123456 , c(dim(X)      [c(1,2)], 5*time_depth)), X,       along = 3)
     X_scale = abind::abind(array(123456 , c(dim(X_scale)[c(1,2)], 5*time_depth)), X_scale, along = 3)
     X_noise = abind::abind(array(NA,      c(dim(X_noise)[c(1,2)], 5*time_depth)), X_noise, along = 3)
     y =       abind::abind(array(NA ,     c(dim(y)      [c(1,2)], 5*time_depth)), y,       along = 3)
+  }
+  # adding buffer at the end
+  if(dim(y)[3]>1){
+    X =       abind::abind(X,       array(123456 , c(dim(X)      [c(1,2)], 5*time_depth)), along = 3)
+    X_scale = abind::abind(X_scale, array(123456 , c(dim(X_scale)[c(1,2)], 5*time_depth)), along = 3)
+    X_noise = abind::abind(X_noise, array(NA,      c(dim(X_noise)[c(1,2)], 5*time_depth)), along = 3)
+    y =       abind::abind(y,       array(NA ,     c(dim(y)      [c(1,2)], 5*time_depth)), along = 3)
   }
   covariates = 
     parallel::mcmapply(process_covariates, list(X, X_noise, X_scale), list(y,y,y), SIMPLIFY = F)
