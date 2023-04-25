@@ -213,3 +213,54 @@ find_unordered_nn_multi <- function(locs_, m_whatever_closest, m_same_var, m_oth
 
 
 
+
+
+
+make_simple_Vecchia_approx_DAG = 
+  function(
+    y, 
+    locs, 
+    m_same_var_same_time = 5, 
+    m_other_vars_same_time = 0, 
+    m_whatever_closest_same_time = 10, 
+    m_same_var_previous_times = 5, 
+    m_other_vars_previous_times = 0, 
+    m_whatever_closest_previous_times = 10
+  ){
+    # splitting y and loc in a loc-var format
+    var_tag = t(outer(rep(1, dim(y)[1]), seq(dim(y)[2])))
+    loc_idx = t(outer(seq(dim(y)[1]), rep(1, dim(y)[2])))
+    at_least_one_obs = t(!apply(y, c(1, 2), function(x)all(is.na(x)))) # loc - var pairs with at least one obs
+    locs_ = locs[loc_idx[at_least_one_obs],]# expanding
+    var_tag_ = var_tag[at_least_one_obs]
+    #
+    NNarray_same_time = find_ordered_nn_multi(
+      locs = locs_, 
+      var_tag = var_tag_, 
+      m_whatever_closest = m_whatever_closest_same_time,
+      m_same_var         = m_same_var_same_time,
+      m_other_vars       = m_other_vars_same_time,
+      lonlat = F)
+    NNarray_pevious_times = NULL
+    if(dim(y)[3]>1)NNarray_pevious_times = find_unordered_nn_multi(
+      locs = locs_, 
+      var_tag = var_tag_, 
+      m_whatever_closest = m_whatever_closest_previous_times, 
+      m_same_var = m_same_var_previous_times, 
+      m_other_vars = m_other_vars_previous_times, 
+      lonlat = F)
+    return(
+      list(
+        "DAG" = list(
+          "children" = lapply(seq(nrow(locs_)), function(x)x), 
+          "parents_same_time" = NNarray_same_time, 
+          "parents_previous_times" = NNarray_pevious_times 
+        ), 
+        field_position = list( # position of sampled w in the loc-var array 
+          "location_idx" = loc_idx[at_least_one_obs],
+          "var_idx" = var_tag[at_least_one_obs], 
+          "loc_match" = split(seq(length(loc_idx[at_least_one_obs])), loc_idx[at_least_one_obs])
+        )
+      )
+    )
+  }

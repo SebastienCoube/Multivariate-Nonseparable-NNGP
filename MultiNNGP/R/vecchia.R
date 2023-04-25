@@ -540,4 +540,40 @@ vecchia_blocks_t_solve = function(x, transposed_vecchia_blocks)
 
 
 
+# computes vecchia approx from parameters
+vecchia_block_approx = function(
+    Vecchia_approx_DAG, locs, lower_tri_idx_DAG, var_idx, time_depth, #does not depend on params
+    rho_vec, a, b, cc, delta, lambda, r, 
+    A_vec, nu_vec, a2_vec
+){
+  if(is.null(a))a=.5
+  if(is.null(b))b=.5
+  if(is.null(cc))cc=.5
+  if(is.null(delta))delta=.5
+  if(is.null(lambda))lambda=.5
+  if(is.null(r))r=.5
+  if(is.null(A_vec))A_vec = rep(.5, length(nu_vec))
+  multiplier = get_multiplier(
+    a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+    r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, 
+    u = seq(0, time_depth-1)
+  )
+  effective_range = get_effective_range(
+    a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
+    r = r, A_vec = A_vec, a2_vec = a2_vec, u = seq(0, time_depth-1)
+  )
+  get_vecchia_blocks(
+    DAG = Vecchia_approx_DAG$DAG, 
+    coeffs = get_linv_coeffs(
+      DAG = Vecchia_approx_DAG$DAG, 
+      locs_ = locs[Vecchia_approx_DAG$field_position$location_idx,], 
+      lower_tri_idx_DAG = lower_tri_idx_DAG, 
+      var_idx = var_idx, 
+      var_tag = Vecchia_approx_DAG$field_position$var_idx, 
+      multiplier = multiplier, 
+      effective_range = effective_range, 
+      rho_vec = rho_vec, nu_vec = nu_vec), 
+    time_depth = time_depth) 
+}
+
  
