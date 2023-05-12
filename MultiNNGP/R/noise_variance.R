@@ -122,3 +122,45 @@ get_noise_info = function(X_noise_list, noise_beta, y_NA_possibilities_match, y_
 #
 #-.5 * log(det(expmat_and_derivatives$expmat[c(1, 2, 4), c(1, 2, 4)]))-
 #  .5 * na.omit(y)%*%solve(expmat_and_derivatives$expmat[c(1, 2, 4), c(1, 2, 4)])%*%na.omit(y)
+
+
+
+get_noise_precisions = function(
+    noise_info, 
+    useful_stuff, 
+    Vecchia_approx_DAG, 
+    time_begin, 
+    time_end
+)
+{
+  # time periods
+  k = seq(time_begin, time_end)
+  noise_precision_matrices = 
+  #  parallel::mc
+  lapply(
+      #mc.cores = parallel::detectCores()-1,
+      X = k, 
+      function(i_time)
+      {   
+        noise_precision_x = 
+          unlist(lapply(seq(useful_stuff$n_loc), function(i_loc)
+          {
+            noise_info[[i_loc]][[i_time]]$tau_precision
+          }))
+        if(is.null(noise_precision_x))return(
+          Matrix::sparseMatrix(
+            i = 1,
+            j = 1, 
+            x = 0, 
+            dims = c(useful_stuff$n_field, useful_stuff$n_field)
+          )
+        )
+        Matrix::sparseMatrix(
+          i = c(useful_stuff$noise_precision_i[[i_time]]),
+          j = c(useful_stuff$noise_precision_j[[i_time]]), 
+          x = c(noise_precision_x), 
+          dims = c(useful_stuff$n_field, useful_stuff$n_field)
+        )
+      })
+  
+}

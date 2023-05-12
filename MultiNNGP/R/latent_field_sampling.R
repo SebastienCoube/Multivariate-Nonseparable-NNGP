@@ -25,46 +25,6 @@ get_precision_blocks = function(vecchia_blocks)
   res
 }
 
-get_noise_precisions = function(
-    noise_info, 
-    useful_stuff, 
-    Vecchia_approx_DAG, 
-    time_begin, 
-    time_end
-)
-{
-  # time periods
-  k = seq(time_begin, time_end)
-  noise_precision_matrices = 
-    parallel::mclapply(
-      mc.cores = parallel::detectCores()-1,
-      X = k, 
-      function(i)
-      {   
-        noise_precision_x = 
-          unlist(lapply(seq(useful_stuff$n_loc), function(j)
-          {
-             noise_info[[j]][[i]]$tau_precision
-          }))
-        if(is.null(noise_precision_x))return(
-          Matrix::sparseMatrix(
-            i = 1,
-            j = 1, 
-            x = 0, 
-            dims = c(useful_stuff$n_field, useful_stuff$n_field)
-          )
-        )
-        Matrix::sparseMatrix(
-          i = c(useful_stuff$noise_precision_i[[i]]),
-          j = c(useful_stuff$noise_precision_j[[i]]), 
-          x = c(noise_precision_x), 
-          dims = c(useful_stuff$n_field, useful_stuff$n_field)
-        )
-      })
-  
-}
-
-
 get_block_toeplitz = function(blocks, block_dim)
 {
   blocks= lapply(blocks, function(x)as(x, "TsparseMatrix"))
@@ -98,7 +58,6 @@ get_block_toeplitz = function(blocks, block_dim)
       x = lapply(blocks, function(M)(M@x))
     )
   ) 
-  Sys.time()-t1
   return(list("i" = i_idx, "j" = j_idx, "x" = x))
 }
 

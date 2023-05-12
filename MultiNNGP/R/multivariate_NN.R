@@ -249,18 +249,24 @@ make_simple_Vecchia_approx_DAG =
       m_same_var = m_same_var_previous_times, 
       m_other_vars = m_other_vars_previous_times, 
       lonlat = F)
-    return(
-      list(
-        "DAG" = list(
-          "children" = lapply(seq(nrow(locs_)), function(x)x), 
-          "parents_same_time" = NNarray_same_time, 
-          "parents_previous_times" = NNarray_pevious_times 
-        ), 
-        field_position = list( # position of sampled w in the loc-var array 
-          "location_idx" = loc_idx[at_least_one_obs],
-          "var_idx" = var_tag[at_least_one_obs], 
-          "loc_match" = split(seq(length(loc_idx[at_least_one_obs])), loc_idx[at_least_one_obs])
+    Vecchia_approx_DAG = 
+      (
+        list(
+          "DAG" = list(
+            "children" = lapply(seq(nrow(locs_)), function(x)x), 
+            "parents_same_time" = NNarray_same_time, 
+            "parents_previous_times" = NNarray_pevious_times 
+          ), 
+          field_position = list( # position of sampled w in the loc-var array 
+            "location_idx" = loc_idx[at_least_one_obs],
+            "var_idx" = var_tag[at_least_one_obs], 
+            "loc_match" = split(seq(length(loc_idx[at_least_one_obs])), loc_idx[at_least_one_obs])
+          )
         )
       )
+    Vecchia_approx_DAG$utils = list(
+      lower_tri_idx_DAG = get_lower_tri_idx_DAG(Vecchia_approx_DAG$DAG),
+      var_idx = get_var_idx(Vecchia_approx_DAG$DAG, Vecchia_approx_DAG$field_position$var_idx)
     )
+    return(Vecchia_approx_DAG)
   }

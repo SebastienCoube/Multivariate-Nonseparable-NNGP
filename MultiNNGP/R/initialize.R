@@ -28,6 +28,20 @@ process_covariates = function(X, y)
 
 
 
+pseudo_sigmoid = function(x, v_min, v_max)
+{
+  (v_max-v_min)/(1+exp(-x))+v_min
+}
+pseudo_logit = function(x, v_min, v_max)
+{
+  p = ((x-v_min)/(v_max-v_min))
+  log(p/(1-p))
+}
+
+#pseudo_logit(pseudo_sigmoid(3, 2, 12), 2, 12)
+
+
+
 ### time_depth = NULL
 ### n_chains = 2
 
@@ -119,6 +133,7 @@ multivariate_NNGP_initialize = function(
   ################
   useful_stuff = list()
   useful_stuff$n_loc = nrow(locs)
+  useful_stuff$locs_repeated  = locs[Vecchia_approx_DAG$field_position$location_idx,]# locs repeated along field
   useful_stuff$time_depth = time_depth
   useful_stuff$buffer_depth  = (5*time_depth)*(time_depth!=1)
   useful_stuff$y_split = apply(y, c(1, 3), c, simplify = F) # split  by time and loc for density computation
@@ -134,8 +149,8 @@ multivariate_NNGP_initialize = function(
   # possible configurations of na patterns in y
   useful_stuff$y_NA_possibilities = as.matrix(expand.grid(lapply(seq(dim(y)[2]), function(i)c(T,F))))#[-2^useful_stuff$n_var_y,]
   useful_stuff$y_NA_possibilities_match = as.matrix(array_matrix_mult(is.na(y), matrix(2^seq(dim(y)[2]-1, 0)))[,1,])+1
-  useful_stuff$lower_tri_idx = get_lower_tri_idx_DAG(Vecchia_approx_DAG$DAG) # lower triangular idx for Vecchia approx
-  useful_stuff$var_idx = get_var_idx(Vecchia_approx_DAG$DAG, Vecchia_approx_DAG$field_position$var_idx) # lower triangular idx for Veccchia approx
+  # useful_stuff$lower_tri_idx = get_lower_tri_idx_DAG(Vecchia_approx_DAG$DAG) # lower triangular idx for Vecchia approx
+  # useful_stuff$var_idx = get_var_idx(Vecchia_approx_DAG$DAG, Vecchia_approx_DAG$field_position$var_idx) # lower triangular idx for Veccchia approx
 ###  # var-loc couples of y where there is at least one observation in all time periods
   useful_stuff$y_at_least_one_obs = apply(y, c(1, 2), function(x)!all(is.na(x))); useful_stuff$y_at_least_one_obs = split(useful_stuff$y_at_least_one_obs, row(useful_stuff$y_at_least_one_obs)) # loc - var pairs with at least one obs
   useful_stuff$n_field_per_site = lapply(useful_stuff$y_at_least_one_obs, sum)# number of latent field variables simulated per spatial site
@@ -181,13 +196,13 @@ multivariate_NNGP_initialize = function(
   hierarchical_model = list()
   smoothness_prior = NULL
   if(is.null(smoothness_prior)){
-    message("putting a wide prior (.5 <-> 2) on smoothness parameters")
-    hierarchical_model$smoothness_prior = cbind("min" = rep(.5, useful_stuff$n_var_y), "max" = rep(2.5, useful_stuff$n_var_y))
+    message("putting a wide prior (.3 <-> 2.5) on smoothness parameters")
+    hierarchical_model$smoothness_prior = cbind("min" = rep(.3, useful_stuff$n_var_y), "max" = rep(2.5, useful_stuff$n_var_y))
   }
-  range_prior = NULL
-  if(is.null(range_prior)){
-    message("putting a wide prior (0 <-> spatial domain radius) on range parameters")
-    hierarchical_model$range_prior = cbind("min" = rep(0, useful_stuff$n_var_y), "max" = rep(max(fields::rdist(matrix(apply(locs, 2, mean),1), locs)), useful_stuff$n_var_y))
+  log_range_prior = NULL
+  if(is.null(log_range_prior)){
+    message("putting a wide prior (log(spatial domain radius)-8 <-> log(spatial domain radius)-2 ) on log range parameters")
+    hierarchical_model$log_range_prior = cbind("min" = rep(max(fields::rdist(matrix(apply(locs, 2, mean),1), locs)-8), useful_stuff$n_var_y), "max" = rep(max(fields::rdist(matrix(apply(locs, 2, mean),1), locs))-2, useful_stuff$n_var_y))
   }
   scale_beta_prior = NULL
   if(is.null(scale_beta_prior)){
@@ -219,44 +234,62 @@ make_one_chain = function(mcmc_nngp_list)
   chain = list()
   # model parameters
   chain$params = list()
-  chain$params$noise_beta = matrix(0, useful_stuff$n_var_X_noise, useful_stuff$n_var_y*(useful_stuff$n_var_y+1)/2)#; chain$params$noise_beta[] = rnorm(length(chain$params$noise_beta))
-  chain$params$scale_beta = matrix(0, useful_stuff$n_var_X_scale, useful_stuff$n_var_y)                           #; chain$params$scale_beta[] = rnorm(length(chain$params$scale_beta))
-  chain$params$beta       = matrix(0, useful_stuff$n_var_X      , useful_stuff$n_var_y)                           ; chain$params$beta      [] = rnorm(length(chain$params$beta      ))
-  chain$params$range      = matrix(runif(useful_stuff$n_var_y, min = hierarchical_model$range_prior[,1],      max = hierarchical_model$range_prior[,2]))
-  chain$params$smoothness = matrix(runif(useful_stuff$n_var_y, min = hierarchical_model$smoothness_prior[,1], max = hierarchical_model$smoothness_prior[,2]))
-  chain$params$field = matrix(0, useful_stuff$n_field, useful_stuff$n_time_periods)
-  rho = GpGp::exponential_isotropic(c(1, 1, 0), matrix(rnorm(2*useful_stuff$n_var_y), useful_stuff$n_var_y))
-  chain$params$rho_vec = rho[lower.tri(rho, diag = F)];  remove(rho)
-  chain$params$a2_vec = 1/runif(nrow(hierarchical_model$range_prior), min = hierarchical_model$range_prior[,1], max = hierarchical_model$range_prior[,2])
-  chain$params$nu_vec = .5 + 2*runif(useful_stuff$n_var_y)
-  if(time_depth>1)
+  
+  chain$params$noise_beta = matrix(0, mcmc_nngp_list$useful_stuff$n_var_X_noise, mcmc_nngp_list$useful_stuff$n_var_y*(mcmc_nngp_list$useful_stuff$n_var_y+1)/2)#; chain$params$noise_beta[] = rnorm(length(chain$params$noise_beta))
+  chain$params$scale_beta = matrix(0, mcmc_nngp_list$useful_stuff$n_var_X_scale, mcmc_nngp_list$useful_stuff$n_var_y)                           #; chain$params$scale_beta[] = rnorm(length(chain$params$scale_beta))
+  chain$params$beta       = matrix(0, mcmc_nngp_list$useful_stuff$n_var_X      , mcmc_nngp_list$useful_stuff$n_var_y)                           ; chain$params$beta      [] = rnorm(length(chain$params$beta      ))
+  
+  chain$params$field = matrix(0, mcmc_nngp_list$useful_stuff$n_field, mcmc_nngp_list$useful_stuff$n_time_periods)
+  
+  rho = GpGp::exponential_isotropic(c(1, 1, 0), matrix(rnorm(2*mcmc_nngp_list$useful_stuff$n_var_y), mcmc_nngp_list$useful_stuff$n_var_y))
+  chain$params$rho_vec = matrix(rho[lower.tri(rho, diag = F)]);  remove(rho)
+  chain$params$log_range_vec = matrix(runif(
+     nrow(mcmc_nngp_list$hierarchical_model$log_range_prior), 
+    min = mcmc_nngp_list$hierarchical_model$log_range_prior[,1], 
+    max = mcmc_nngp_list$hierarchical_model$log_range_prior[,2]))
+  chain$params$smoothness_vec = matrix(runif(
+     nrow(mcmc_nngp_list$hierarchical_model$smoothness_prior), 
+    min = mcmc_nngp_list$hierarchical_model$smoothness_prior[,1], 
+    max = mcmc_nngp_list$hierarchical_model$smoothness_prior[,1] + 
+      (mcmc_nngp_list$hierarchical_model$smoothness_prior[,2] - mcmc_nngp_list$hierarchical_model$smoothness_prior[,1])/3))
+  if(mcmc_nngp_list$useful_stuff$time_depth>1)
   {
-    chain$params$alpha = .01 * runif(1)
-    chain$params$a_scal = runif(1) 
-    chain$params$b_scal = runif(1) 
-    chain$params$cc = 1*runif(1) 
-    chain$params$delta = runif(1) 
-    chain$params$r = 1 * runif(1) 
-    chain$params$A_vec = runif(useful_stuff$n_var_y)
-    chain$params$lambda = runif(1) 
+    chain$params$A_vec =  matrix(runif(mcmc_nngp_list$useful_stuff$n_var_y))
+    
+    chain$params$a_scal = matrix(runif(1) )
+    chain$params$b_scal = matrix(runif(1) )
+    chain$params$cc     = matrix(1*runif(1))
+    chain$params$delta  = matrix(runif(1) )
+    chain$params$r      = matrix(1 * runif(1))
+    chain$params$lambda = matrix(runif(1))
   }
   
   chain$stuff = list()
   chain$stuff$noise_info = get_noise_info(
-    X_noise_list = covariates$X_noise, 
+    X_noise_list = mcmc_nngp_list$covariates$X_noise, 
     noise_beta = chain$params$noise_beta, 
-    y_NA_possibilities_match = useful_stuff$y_NA_possibilities_match, 
-    y_NA_possibilities = useful_stuff$y_NA_possibilities, 
-    y = y)
+    y_NA_possibilities_match = mcmc_nngp_list$useful_stuff$y_NA_possibilities_match, 
+    y_NA_possibilities = mcmc_nngp_list$useful_stuff$y_NA_possibilities, 
+    y = mcmc_nngp_list$y)
   
-  chain$stuff$vecchia = 
+  chain$stuff$vecchia_blocks = 
     vecchia_block_approx( 
-      Vecchia_approx_DAG = Vecchia_approx_DAG, locs = locs, lower_tri_idx_DAG = useful_stuff$lower_tri_idx, 
-      var_idx = useful_stuff$var_idx, time_depth = useful_stuff$time_depth, #does not depend on params
+      Vecchia_approx_DAG = mcmc_nngp_list$Vecchia_approx_DAG, locs = mcmc_nngp_list$locs, 
+      time_depth = mcmc_nngp_list$useful_stuff$time_depth, #does not depend on params
       rho_vec = chain$params$rho_vec, a =  chain$params$a_scal,
       b = chain$params$b_scal, cc = chain$params$cc, delta = chain$params$delta, 
       lambda = chain$params$lambda, r = chain$params$r, 
-      A_vec = chain$params$A_vec, nu_vec = chain$params$nu_vec, a2_vec = chain$params$a2_vec
+      A_vec = chain$params$A_vec, nu_vec = chain$params$smoothness_vec, log_range_vec = c(chain$params$log_range_vec)
     )
+  chain$stuff$transposed_vecchia_blocks = vecchia_blocks_t(chain$stuff$vecchia_blocks)
+  chain$stuff$precision_blocks = get_precision_blocks(chain$stuff$vecchia_blocks)
+  chain$stuff$noise_precisions = get_noise_precisions(noise_info = chain$stuff$noise_info, useful_stuff = mcmc_nngp_list$useful_stuff, 
+                                                      Vecchia_approx_DAG = mcmc_nngp_list$Vecchia_approx_DAG, 
+                                                      time_begin = 1, time_end = mcmc_nngp_list$useful_stuff$n_time_periods)
+  
+  chain$kernels = list()
+  chain$kernels$var_wise_ancillary =  rep(-3, mcmc_nngp_list$useful_stuff$n_var_y)
+  chain$kernels$var_wise_sufficient = rep(-3, mcmc_nngp_list$useful_stuff$n_var_y)
+
   return(chain)
 }

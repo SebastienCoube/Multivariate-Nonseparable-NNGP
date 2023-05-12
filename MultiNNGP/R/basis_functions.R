@@ -28,7 +28,6 @@ recursive_k_means = function(locs_, cluster_size_target)
   res
 }
 
-
 get_indicator_basis_functions = function(recursive_k_means_clust, useful_stuff)
 {
   lapply(unique(recursive_k_means_clust$clust), function(i)
@@ -40,7 +39,7 @@ get_indicator_basis_functions = function(recursive_k_means_clust, useful_stuff)
   )
 }
 
-color_basis_functions = function(basis_functions)
+color_basis_functions = function(basis_functions, precision_blocks)
 {
     basis_functions_nonzero_sites = 
     do.call(

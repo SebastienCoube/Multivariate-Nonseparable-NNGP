@@ -113,7 +113,6 @@ get_linv_coeffs = function(
     X = seq(length(DAG[[1]])), mc.cores = parallel::detectCores(), 
     FUN = function(i)
     {
-      print(i)
       covmat_coeffs_same_time = GMA_compressed(
         locs_ = locs_[c(DAG$parents_same_time[[i]], DAG$children[[i]]),, drop = F],
         lower_tri_idx = lower_tri_idx_DAG$same_time[[i]],
@@ -542,9 +541,9 @@ vecchia_blocks_t_solve = function(x, transposed_vecchia_blocks)
 
 # computes vecchia approx from parameters
 vecchia_block_approx = function(
-    Vecchia_approx_DAG, locs, lower_tri_idx_DAG, var_idx, time_depth, #does not depend on params
+    Vecchia_approx_DAG, locs, time_depth, #does not depend on params
     rho_vec, a, b, cc, delta, lambda, r, 
-    A_vec, nu_vec, a2_vec
+    A_vec, nu_vec, log_range_vec
 ){
   if(is.null(a))a=.5
   if(is.null(b))b=.5
@@ -552,7 +551,12 @@ vecchia_block_approx = function(
   if(is.null(delta))delta=.5
   if(is.null(lambda))lambda=.5
   if(is.null(r))r=.5
-  if(is.null(A_vec))A_vec = rep(.5, length(nu_vec))
+  if(is.null(A_vec))A_vec = rep(.5, length(range_vec))
+  
+  a = c(a);   b = c(b);   cc = c(cc);   r = c(r);   delta = c(delta);   lambda = c(lambda); 
+  A_vec = c(A_vec); nu_vec = c(nu_vec); a2_vec = exp(-c(log_range_vec))
+  
+  
   multiplier = get_multiplier(
     a = a, b = b, cc = cc, delta = delta, lambda = lambda, 
     r = r, A_vec = A_vec, nu_vec = nu_vec, a2_vec = a2_vec, 
@@ -567,8 +571,8 @@ vecchia_block_approx = function(
     coeffs = get_linv_coeffs(
       DAG = Vecchia_approx_DAG$DAG, 
       locs_ = locs[Vecchia_approx_DAG$field_position$location_idx,], 
-      lower_tri_idx_DAG = lower_tri_idx_DAG, 
-      var_idx = var_idx, 
+      lower_tri_idx_DAG = Vecchia_approx_DAG$utils$lower_tri_idx_DAG, 
+      var_idx = Vecchia_approx_DAG$utils$var_idx, 
       var_tag = Vecchia_approx_DAG$field_position$var_idx, 
       multiplier = multiplier, 
       effective_range = effective_range, 
