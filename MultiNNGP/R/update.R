@@ -9,14 +9,15 @@ homeostasy  = function(log_var, accepted, target  = .25, eps = .01)
 do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_rate = 1)
 {
   iter = 1
-  records = lapply(chain$params, function(x)array(0, c(dim(x), 500)))
+  records = lapply(chain$params, function(x)array(0, c(dim(x), 200)))
   
-  for(iter in seq(iter, 500)){
+  for(iter in seq(iter, 200)){
     print(iter)
     #################################################################
     # Sampling the latent field using the "blocks 'n' bases" scheme #
     #################################################################
     if(iter == 1 | iter/2 ==iter %/% 2)
+      t1 = Sys.time()
     {
       time_begin = mcmc_nngp_list$useful_stuff$time_depth
       time_end = mcmc_nngp_list$useful_stuff$n_time_periods - mcmc_nngp_list$useful_stuff$time_depth +1
@@ -126,7 +127,8 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             chain$params$field[,time_begin:time_end] +
             as.matrix(Reduce("+", mapply(function(e, b) b%*%e, eps, basis_functions[which(coloring==colo)])))
           
-        if(iter/10==iter%/%10){
+        #if(iter/10==iter%/%10)
+          {
           plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,10], 
                col = rep(c("lightgray", "lightpink", "lightblue"), each = stuff_for_plots$n_loc), 
                cex = .3, pch = 15, 
@@ -141,6 +143,7 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
         }
       }
     }
+      Sys.time()-t1
     #########################
     # Covariance parameters REMEMBER TO ADD A #
     #########################

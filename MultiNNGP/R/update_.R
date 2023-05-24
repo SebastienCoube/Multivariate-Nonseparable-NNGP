@@ -19,7 +19,7 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
     # Sampling the latent field using the "blocks 'n' bases" scheme #
     #################################################################
     if(iter == 1 | iter/2 ==iter %/% 2)
-      t1 = Sys.time()
+      t0 = Sys.time()
     {
       
       ###################################################################
@@ -30,7 +30,7 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
           mcmc_nngp_list$useful_stuff$time_depth, 
           mcmc_nngp_list$useful_stuff$n_time_periods - mcmc_nngp_list$useful_stuff$time_depth +1
         ), 
-        target_size = 1000
+        target_size = 300
       )
       if(nrow(time_split)==1) time_markov_mat = matrix(1,1,1)
       if(nrow(time_split)==2) time_markov_mat = matrix(1,2,2)
@@ -61,10 +61,48 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             cluster_size_target = cluster_size_target, 
             Vecchia_approx_DAG = mcmc_nngp_list$Vecchia_approx_DAG, 
             useful_stuff = mcmc_nngp_list$useful_stuff)),
-          recursive = F),
-        # basis functions corresponding to usual 
-        get_indicator_basis_functions(recursive_k_means_clust = recursive_k_means_clust, useful_stuff = mcmc_nngp_list$useful_stuff)
+          recursive = F)
       )
+      # removing indicator basis functions to guarantee reversibility
+      # by construction the basis functions are independent
+      # removing the lowest index in order to reduce the number of colors
+      # as many removed indices as basis functions
+      removed_indices = rep(0, sum(sapply(basis_functions, ncol)))
+      candidate_loc_idx = seq(nrow(basis_functions[[1]]))
+      count = 1
+      # chosing witnesses of smallest order in Vecchia ordering
+      for(i_basis_function in seq(length(basis_functions)))
+      {
+        for(j in seq(ncol(basis_functions[[i_basis_function]])))
+        {
+          # choosing smallest index available among where basis function is != 0
+          removed_indices[count]= min(
+            candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
+            )
+          # forbidding index to be chosen again
+            candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)
+          ][which.min(
+            candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
+          )] = Inf
+          count = count+1
+        }
+      }
+      # test : does any basis function not have a witness ?
+      ## any(
+      ##   (
+      ##     Matrix::sparseVector(x = 1, i = removed_indices, length = nrow(basis_functions[[1]])) %*%
+      ##       (do.call(cbind, basis_functions)!=0)
+      ##   )==0)
+      recursive_k_means_clust$clust[removed_indices] = NA
+      basis_functions = 
+        c(
+          basis_functions, 
+          get_indicator_basis_functions (
+          recursive_k_means_clust = recursive_k_means_clust, 
+          useful_stuff = mcmc_nngp_list$useful_stuff)
+        )
+      
+      # basis_functions_nonzero = lapply(basis_functions, function(x)which(apply(x, 1, function(x)(any(x!=0)))))
       
       ##################################################
       # coloring space-time groups for parallelization #
@@ -75,10 +113,12 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
         precision_blocks = chain$stuff$precision_blocks, 
         time_markov_mat = time_markov_mat
         )
-      colo = 1
+      colo = 4
+      print(table(coloring))
       # looping on colors
       for(colo in seq(max(coloring)))
       { 
+        t1 = Sys.time()
         # precision times latent field
         Q_field = vecchia_blocks_mult(
           x = chain$params$field,
@@ -93,9 +133,12 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
           x = Q_field,
           transposed_vecchia_blocks = chain$stuff$transposed_vecchia_blocks
         )
-        # tau y - field
+        Sys.time()-t1
+        ## # tau y - field
+        t1 = Sys.time()
         y_minus_field = chain$params$field - mcmc_nngp_list$useful_stuff$y_loc_var_format_no_NA
         tau_y_minus_field = do.call(cbind, mapply(function(x,y) as.vector(Matrix::crossprod(x, y)), chain$stuff$noise_precisions, split(y_minus_field, col(y_minus_field)), SIMPLIFY = F))
+        Sys.time()-t1
         colo_idx = 19
         eps = parallel::mclapply(
           mc.cores = 8, which(coloring == colo)
@@ -109,6 +152,16 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             time_end   = time_split[i_time_split,2]
             
             # part with observations ####
+            t1 = Sys.time()
+            #y_minus_field = chain$params$field[,seq(time_begin, time_end)] - mcmc_nngp_list$useful_stuff$y_loc_var_format_no_NA[,seq(time_begin, time_end)]
+            #tau_y_minus_field = 
+            #  do.call(cbind, 
+            #          mapply(
+            #            function(x,y) as.vector(Matrix::crossprod(x, y)), 
+            #            chain$stuff$noise_precisions[seq(time_begin, time_end)], 
+            #            split(y_minus_field, col(y_minus_field)), SIMPLIFY = F))
+            Sys.time()-t1
+            #B_tau_y_minus_field = Matrix::crossprod(basis_functions[[i_basis_function]], tau_y_minus_field)
             B_tau_y_minus_field = Matrix::crossprod(basis_functions[[i_basis_function]], tau_y_minus_field[,seq(time_begin, time_end)])
             B_tau_B_x = list()
             B_tau_B_i = list()
@@ -132,15 +185,19 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             B_Q_B[[1]]=Matrix::forceSymmetric(B_Q_B[[1]], uplo = "L")
             prior_precision = get_block_toeplitz(B_Q_B, time_end- time_begin+1)
             B_Q_field = (Matrix::crossprod(basis_functions[[i_basis_function]], Q_field[,seq(time_begin, time_end)]))
-            
+           
             # posterior ####
-            posterior_chol = Matrix::chol(Matrix::sparseMatrix(
-              i = c(prior_precision$i, B_tau_B_j), 
-              j = c(prior_precision$j, B_tau_B_i), 
-              x = c(prior_precision$x, B_tau_B_x), 
-              symmetric = T, 
-              dims = rep((time_end-time_begin+1)*ncol(basis_functions[[i_basis_function]]), 2)
-            ))
+            t1 = Sys.time()
+            posterior_chol = Matrix::chol(
+              Matrix::sparseMatrix(
+                i = c(prior_precision$i, B_tau_B_j), 
+                j = c(prior_precision$j, B_tau_B_i), 
+                x = c(prior_precision$x, B_tau_B_x), 
+                symmetric = T, 
+                dims = rep((time_end-time_begin+1)*ncol(basis_functions[[i_basis_function]]), 2)
+              )
+            )
+            Sys.time()-t1
             
             # sampling coefficients ####
             eps = 
@@ -177,23 +234,48 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
               basis_functions[[i_basis_function]] %*% eps[[eps_idx]]
             )
         }
-        
+### # works for 3 variables     
+###        plot(
+###          rep(mcmc_nngp_list$locs[,1], stuff_for_plots$n_var), 
+###          mcmc_nngp_list$y[,,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
+###          col = rep(c("lightgray", "lightpink", "lightblue"), each = mcmc_nngp_list$useful_stuff$n_loc), 
+###          cex = .3, pch = 15, 
+###        )
+###        points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
+###               chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
+###               cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx + (mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx==3)
+###        )
+###        
+###        plot(
+###          rep(mcmc_nngp_list$locs[,1], stuff_for_plots$n_var), 
+###          mcmc_nngp_list$y[,,mcmc_nngp_list$useful_stuff$buffer_depth + 15], 
+###          col = rep(c("lightgray", "lightpink", "lightblue"), 
+###                    each = mcmc_nngp_list$useful_stuff$n_loc), 
+###          cex = .3, pch = 15, 
+###        )
+###        points(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), y_true[,,10], 
+###               col = rep(c("black", "red", "blue"), 
+###                         each = stuff_for_plots$n_loc), 
+###               cex = .3, pch = 15, 
+###               xlab = "spatial site", 
+###               ylab = "latent field and true field" 
+###        )
         #if(iter/10==iter%/%10){
-          plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,10], 
-               col = rep(c("lightgray", "lightpink", "lightblue"), each = stuff_for_plots$n_loc), 
-               cex = .3, pch = 15, 
-               xlab = "spatial site", 
-               ylab = "latent field and true field", 
-               main = paste("pass", i, "color", colo)
-          )
+         plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,10], 
+              col = rep(c("lightgray", "lightpink", "lightgreen", "lightblue", "lightcyan", "lightpink"), each = stuff_for_plots$n_loc), 
+              cex = .3, pch = 15, 
+              xlab = "spatial site", 
+              ylab = "latent field and true field"
+         )
           points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
                  chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
-                 cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx + (mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx==3)
+                 cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx
           )
+
         #}
       }
     }
-      print(Sys.time()-t1)
+      print(Sys.time()-t0)
     #########################
     # Covariance parameters REMEMBER TO ADD A #
     #########################

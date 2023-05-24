@@ -1,3 +1,22 @@
+split_vector <- function(vec, target_size = 100) {
+  n <- length(vec)
+  k <- max(floor(n/target_size), 1)  # determine number of subvectors needed
+  m = ceiling(n/k)
+  subvecs <- vector("list", k)
+  start <- 1
+  for (i in 1:k) {
+    end <- min(i*m + rbinom(1, 1, .5)*min(rpois(1,10), 15), n)
+    subvecs[[i]] <- vec[start:end]
+    start <- end + 1
+  }
+  return(
+    cbind(
+      sapply(subvecs, function(x)x[1]),
+      sapply(subvecs, function(x)x[length(x)])
+    )
+  )
+}
+
 recursive_k_means = function(locs_, cluster_size_target)
 {
   clust = rep(1, nrow(locs_))
@@ -30,13 +49,41 @@ recursive_k_means = function(locs_, cluster_size_target)
 
 get_indicator_basis_functions = function(recursive_k_means_clust, useful_stuff)
 {
-  lapply(unique(recursive_k_means_clust$clust), function(i)
+  lapply(as.vector(na.omit(unique(recursive_k_means_clust$clust))), function(i)
     Matrix::sparseMatrix(
       i = which(recursive_k_means_clust$clust==i),
-      j = seq(sum(recursive_k_means_clust$clust==i)),
-      x=1, dims = c(useful_stuff$n_field, sum(recursive_k_means_clust$clust==i))
+      j = seq(sum(na.omit(recursive_k_means_clust$clust==i))),
+      x=1, dims = c(useful_stuff$n_field, sum(na.omit(recursive_k_means_clust$clust==i)))
     )
   )
+}
+## get_indicator_basis_functions_REMOVE_HIGHEST = function(recursive_k_means_clust, useful_stuff)
+## {
+##   lapply(unique(recursive_k_means_clust$clust), function(i)
+##   {
+##     idx = which(recursive_k_means_clust$clust==i)
+##     idx = idx[-seq(5)]
+##     Matrix::sparseMatrix(
+##       i = idx,
+##       j = seq(length(idx)),
+##       x=1, dims = c(useful_stuff$n_field, length(idx))
+##     )
+##   }
+##   )
+## }
+
+color_basis_functions_time_slicing = function(basis_functions, precision_blocks, time_markov_mat)
+{
+  basis_functions_nonzero_sites = 
+    do.call(
+      cbind, 
+      lapply(basis_functions, 
+             function(x)x%*%Matrix::sparseVector(x = rep(1, ncol(x)), i = seq(ncol(x)), length = (ncol(x))))
+    )
+  basis_functions_markov_mat = Matrix::t(basis_functions_nonzero_sites) %*% (precision_blocks[[1]]+precision_blocks[[2]]) %*% basis_functions_nonzero_sites
+  basis_functions_markov_mat@x = rep(1, length(basis_functions_markov_mat@x))
+  markov_mat = time_markov_mat %x% basis_functions_markov_mat
+  naive_greedy_coloring(markov_mat)
 }
 
 color_basis_functions = function(basis_functions, precision_blocks)

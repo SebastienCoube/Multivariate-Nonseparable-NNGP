@@ -230,23 +230,40 @@ get_vecchia_blocks = function(DAG, coeffs, time_depth)
 }  
 
 # multiplication of a vector by the compressed repetitive sparse prior Chol
-vecchia_blocks_mult = function(x, vecchia_blocks)
-{
-  # space only case
-  if(vecchia_blocks$time_depth == 1)return(vecchia_blocks$triangular_on_diag %*% x)
-  t1 = Sys.time()
-  # result matrix
-  res = matrix(0, nrow(x), ncol(x))
-  # first columns
-  res[,1:(vecchia_blocks$time_depth-1)]=x[,1:(vecchia_blocks$time_depth-1)]
-  # multiplying current time blocks
-  res[,vecchia_blocks$time_depth:ncol(res)] = as.matrix(vecchia_blocks$triangular_on_diag %*% x[,vecchia_blocks$time_depth:ncol(res)])
-  # multiplying previous time blocks
-  for(i in seq(vecchia_blocks$time_depth-1)) res[,vecchia_blocks$time_depth:ncol(res)] = res[,vecchia_blocks$time_depth:ncol(res)] + as.matrix(vecchia_blocks$rectangular_below_diag[[i]] %*% 
-    x[,seq(0, ncol(res)-vecchia_blocks$time_depth)+i])
-  Sys.time()-t1
-  res
-}
+ vecchia_blocks_mult = function(x, vecchia_blocks)
+ {
+   # space only case
+   if(vecchia_blocks$time_depth == 1)return(vecchia_blocks$triangular_on_diag %*% x)
+   t1 = Sys.time()
+   # result matrix
+   res = matrix(0, nrow(x), ncol(x))
+   # first columns
+   res[,1:(vecchia_blocks$time_depth-1)]=x[,1:(vecchia_blocks$time_depth-1)]
+   # multiplying current time blocks
+   res[,vecchia_blocks$time_depth:ncol(res)] = as.matrix(vecchia_blocks$triangular_on_diag %*% x[,vecchia_blocks$time_depth:ncol(res)])
+   # multiplying previous time blocks
+   for(i in seq(vecchia_blocks$time_depth-1)) res[,vecchia_blocks$time_depth:ncol(res)] = res[,vecchia_blocks$time_depth:ncol(res)] + as.matrix(vecchia_blocks$rectangular_below_diag[[i]] %*% 
+     x[,seq(0, ncol(res)-vecchia_blocks$time_depth)+i])
+   Sys.time()-t1
+   res
+ }
+#vecchia_blocks_mult = function(x, vecchia_blocks)
+#{
+#  # space only case
+#  if(vecchia_blocks$time_depth == 1)return(vecchia_blocks$triangular_on_diag %*% x)
+#  t1 = Sys.time()
+#  # result matrix
+#  res = matrix(0, nrow(x), ncol(x))
+#  # first columns
+#  res[,1:(vecchia_blocks$time_depth-1)]=x[,1:(vecchia_blocks$time_depth-1)]
+#  # multiplying current time blocks
+#  res[,vecchia_blocks$time_depth:ncol(res)] = (vecchia_blocks$triangular_on_diag %*% x[,vecchia_blocks$time_depth:ncol(res)])
+#  # multiplying previous time blocks
+#  for(i in seq(vecchia_blocks$time_depth-1)) res[,vecchia_blocks$time_depth:ncol(res)] = res[,vecchia_blocks$time_depth:ncol(res)] + (vecchia_blocks$rectangular_below_diag[[i]] %*% 
+#    x[,seq(0, ncol(res)-vecchia_blocks$time_depth)+i])
+#  Sys.time()-t1
+#  res
+#}
 
 # multiplication of a vector by the compressed repetitive sparse prior Chol
 vecchia_blocks_t_mult = function(x, transposed_vecchia_blocks)

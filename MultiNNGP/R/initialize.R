@@ -70,7 +70,8 @@ multivariate_NNGP_initialize = function(
     X_scale, 
     time_depth = NULL,
     Vecchia_approx_DAG, 
-    n_chains = 2
+    n_chains = 2,
+    buffer_depth = 30
   )
 {
   #################
@@ -107,17 +108,17 @@ multivariate_NNGP_initialize = function(
   #########################
   # adding buffer at the beginning
   if(dim(y)[3]>1){
-    X =       abind::abind(array(123456 , c(dim(X)      [c(1,2)], 5*time_depth)), X,       along = 3)
-    X_scale = abind::abind(array(123456 , c(dim(X_scale)[c(1,2)], 5*time_depth)), X_scale, along = 3)
-    X_noise = abind::abind(array(NA,      c(dim(X_noise)[c(1,2)], 5*time_depth)), X_noise, along = 3)
-    y =       abind::abind(array(NA ,     c(dim(y)      [c(1,2)], 5*time_depth)), y,       along = 3)
+    X =       abind::abind(array(123456 , c(dim(X)      [c(1,2)], buffer_depth)), X,       along = 3)
+    X_scale = abind::abind(array(123456 , c(dim(X_scale)[c(1,2)], buffer_depth)), X_scale, along = 3)
+    X_noise = abind::abind(array(NA,      c(dim(X_noise)[c(1,2)], buffer_depth)), X_noise, along = 3)
+    y =       abind::abind(array(NA ,     c(dim(y)      [c(1,2)], buffer_depth)), y,       along = 3)
   }
   # adding buffer at the end
   if(dim(y)[3]>1){
-    X =       abind::abind(X,       array(123456 , c(dim(X)      [c(1,2)], 5*time_depth)), along = 3)
-    X_scale = abind::abind(X_scale, array(123456 , c(dim(X_scale)[c(1,2)], 5*time_depth)), along = 3)
-    X_noise = abind::abind(X_noise, array(NA,      c(dim(X_noise)[c(1,2)], 5*time_depth)), along = 3)
-    y =       abind::abind(y,       array(NA ,     c(dim(y)      [c(1,2)], 5*time_depth)), along = 3)
+    X =       abind::abind(X,       array(123456 , c(dim(X)      [c(1,2)], time_depth)), along = 3)
+    X_scale = abind::abind(X_scale, array(123456 , c(dim(X_scale)[c(1,2)], time_depth)), along = 3)
+    X_noise = abind::abind(X_noise, array(NA,      c(dim(X_noise)[c(1,2)], time_depth)), along = 3)
+    y =       abind::abind(y,       array(NA ,     c(dim(y)      [c(1,2)], time_depth)), along = 3)
   }
   covariates = 
     parallel::mcmapply(process_covariates, list(X, X_noise, X_scale), list(y,y,y), SIMPLIFY = F)
@@ -135,7 +136,7 @@ multivariate_NNGP_initialize = function(
   useful_stuff$n_loc = nrow(locs)
   useful_stuff$locs_repeated  = locs[Vecchia_approx_DAG$field_position$location_idx,]# locs repeated along field
   useful_stuff$time_depth = time_depth
-  useful_stuff$buffer_depth  = (5*time_depth)*(time_depth!=1)
+  useful_stuff$buffer_depth  =buffer_depth
   useful_stuff$y_split = apply(y, c(1, 3), c, simplify = F) # split  by time and loc for density computation
   useful_stuff$y_na_killed = y; useful_stuff$y_na_killed[is.na(useful_stuff$y_na_killed)] = 0
   useful_stuff$non_na_y = apply(y, c(1, 3), function(x)which(!is.na(x)), simplify = F) 
