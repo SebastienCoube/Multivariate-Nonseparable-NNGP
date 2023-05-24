@@ -1,3 +1,108 @@
+# To do: improve class into tiles and get basis functions, 
+# can be much more efficient 
+
+
+blocks_n_bases_with_witnesses = 
+  function(mcmc_nngp_list, 
+           time_target_size = 300, 
+           space_cluster_size_target = 100)
+{
+  ##################
+  # TIME SPLITTING #
+  ##################
+  # splitting the time period into chunks
+  time_split = split_vector(
+    seq(
+      mcmc_nngp_list$useful_stuff$time_depth, 
+      mcmc_nngp_list$useful_stuff$n_time_periods - mcmc_nngp_list$useful_stuff$time_depth +1
+    ), 
+    target_size = time_target_size
+  )
+###   # time markov mat
+###   if(nrow(time_split)==1) time_markov_mat = matrix(1,1,1)
+###   if(nrow(time_split)==2) time_markov_mat = matrix(1,2,2)
+###   if(nrow(time_split)>2)
+###   {
+###     time_markov_mat = toeplitz(c(1,1,rep(0, nrow(time_split)-3), 1))
+###     time_markov_mat[1, ncol(time_markov_mat)] = 0
+###     time_markov_mat[ncol(time_markov_mat), 1] = 0
+###   }
+  ###########################
+  # SPATIAL BASIS FUNCTIONS #
+  ###########################
+  basis_functions = c(
+    # groups of spatial basis functions
+    unlist(lapply(
+      get_grids(
+        points = mcmc_nngp_list$useful_stuff$locs_repeated, 
+        cluster_size_target = space_cluster_size_target), 
+      function(x)get_basis_functions(
+        points = mcmc_nngp_list$useful_stuff$locs_repeated, 
+        tile_info = x, 
+        cluster_size_target = space_cluster_size_target, 
+        Vecchia_approx_DAG = mcmc_nngp_list$Vecchia_approx_DAG, 
+        useful_stuff = mcmc_nngp_list$useful_stuff)),
+      recursive = F)
+  )
+  
+
+  # partitioning the space into clusters whose size is lower than cluster_size_target
+  recursive_k_means_clust = recursive_k_means(locs_ = mcmc_nngp_list$useful_stuff$locs_repeated, space_cluster_size_target)
+  # removing indicator basis functions to guarantee reversibility
+  # by construction the basis functions are independent
+  # removing the lowest index in order to reduce the number of colors
+  # as many removed indices as basis functions
+  removed_indices = rep(0, sum(sapply(basis_functions, ncol)))
+  candidate_loc_idx = seq(nrow(basis_functions[[1]]))
+  count = 1
+  # chosing witnesses of smallest order in Vecchia ordering
+  for(i_basis_function in seq(length(basis_functions)))
+  {
+    for(j in seq(ncol(basis_functions[[i_basis_function]])))
+    {
+      # choosing smallest index available among where basis function is != 0
+      removed_indices[count]= min(
+        candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
+      )
+      # forbidding index to be chosen again
+      candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)
+      ][which.min(
+        candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
+      )] = Inf
+      count = count+1
+    }
+  }
+  # test : does any basis function not have a witness ?
+  ## any(
+  ##   (
+  ##     Matrix::sparseVector(x = 1, i = removed_indices, length = nrow(basis_functions[[1]])) %*%
+  ##       (do.call(cbind, basis_functions)!=0)
+  ##   )==0)
+  recursive_k_means_clust$clust[removed_indices] = NA
+  # adding blocks to bases
+  basis_functions = 
+    c(
+      basis_functions, 
+      get_indicator_basis_functions (
+        recursive_k_means_clust = recursive_k_means_clust, 
+        useful_stuff = mcmc_nngp_list$useful_stuff)
+    )
+  
+  
+  bases_coloring = 
+    color_basis_functions(
+      basis_functions = basis_functions, 
+      precision_blocks = chain$stuff$precision_blocks
+    )
+  ############
+  # COLORING #
+  ############
+  coloring= rep(bases_coloring, nrow(time_split)) + rep(seq(nrow(time_split))%%2 * max(bases_coloring), each = length(bases_coloring))
+  return(list(basis_functions = basis_functions, time_split = time_split, coloring = coloring))
+}
+
+
+
 split_vector <- function(vec, target_size = 100) {
   n <- length(vec)
   k <- max(floor(n/target_size), 1)  # determine number of subvectors needed
@@ -113,20 +218,25 @@ class_points_into_tiles <- function(locs, tile_size) {
   n_y_tiles <- ceiling((max_y - min_y) / tile_size)+1
   
   # Classify each point into a tile
-  tile_indices <- matrix(0, nrow = nrow(locs), ncol = 2)
-  for (i in 1:nrow(locs)) {
-    x_tile <- ceiling((locs[i,1] - min_x +1e-8) / tile_size)
-    y_tile <- ceiling((locs[i,2] - min_y +1e-8) / tile_size)
-    tile_indices[i,] <- c(x_tile, y_tile)
-  }
+  #tile_indices <- matrix(0, nrow = nrow(locs), ncol = 2)
+  #for (i in 1:nrow(locs)) {
+  #  x_tile <- ceiling((locs[i,1] - min_x +1e-8) / tile_size)
+  #  y_tile <- ceiling((locs[i,2] - min_y +1e-8) / tile_size)
+  #  tile_indices[i,] <- c(x_tile, y_tile)
+  #}
+  
+  tile_indices = cbind(
+    as.numeric(cut(locs[,1]+abs(rnorm(nrow(locs), 0, 1e-10)), breaks = unique(c(seq(min_x-.00001, max_x + .00001, tile_size), max_x)))), 
+    as.numeric(cut(locs[,2]+abs(rnorm(nrow(locs), 0, 1e-10)), breaks = unique(c(seq(min_y-.00001, max_y + .00001, tile_size), max_x))))
+  )
   
   tile_centers <- array(0, dim = c(n_x_tiles, n_y_tiles, 2))
-  x_noise = tile_size* runif(1)
-  y_noise = tile_size* runif(1)
+  #x_noise = tile_size* runif(1)
+  #y_noise = tile_size* runif(1)
   for (i in 1:n_x_tiles) {
     for (j in 1:n_y_tiles) {
-      x_center <- min_x + (i - 0.5) * tile_size - x_noise
-      y_center <- min_y + (j - 0.5) * tile_size - y_noise
+      x_center <- min_x + (i - 0.5) * tile_size# - x_noise
+      y_center <- min_y + (j - 0.5) * tile_size# - y_noise
       tile_centers[i,j,] <- c(x_center, y_center)
     }
   }

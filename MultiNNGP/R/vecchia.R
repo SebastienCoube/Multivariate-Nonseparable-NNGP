@@ -236,9 +236,9 @@ get_vecchia_blocks = function(DAG, coeffs, time_depth)
    if(vecchia_blocks$time_depth == 1)return(vecchia_blocks$triangular_on_diag %*% x)
    t1 = Sys.time()
    # result matrix
-   res = matrix(0, nrow(x), ncol(x))
+   res = matrix(0, nrow(vecchia_blocks$triangular_on_diag), ncol(x))
    # first columns
-   res[,1:(vecchia_blocks$time_depth-1)]=x[,1:(vecchia_blocks$time_depth-1)]
+   #res[,1:(vecchia_blocks$time_depth-1)]=x[,1:(vecchia_blocks$time_depth-1)]
    # multiplying current time blocks
    res[,vecchia_blocks$time_depth:ncol(res)] = as.matrix(vecchia_blocks$triangular_on_diag %*% x[,vecchia_blocks$time_depth:ncol(res)])
    # multiplying previous time blocks
@@ -270,9 +270,9 @@ vecchia_blocks_t_mult = function(x, transposed_vecchia_blocks)
 {
   t1 = Sys.time()
   # result matrix
-  res = matrix(0, nrow(x), ncol(x))
+  res = matrix(0, nrow(transposed_vecchia_blocks$t_triangular_on_diag), ncol(x))
   # first columns
-  res[,1:(transposed_vecchia_blocks$time_depth-1)]=x[,1:(transposed_vecchia_blocks$time_depth-1)]
+  #res[,1:(transposed_vecchia_blocks$time_depth-1)]=x[,1:(transposed_vecchia_blocks$time_depth-1)]
   # multiplying current time blocks
   res[,transposed_vecchia_blocks$time_depth:ncol(res)] = as.matrix(transposed_vecchia_blocks$t_triangular_on_diag %*% x[,transposed_vecchia_blocks$time_depth:ncol(res)])
   # multiplying previous time blocks

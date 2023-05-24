@@ -22,102 +22,18 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
       t0 = Sys.time()
     {
       
-      ###################################################################
-      # splitting the time period into chunks of size approximately 100 #
-      ###################################################################
-      time_split = split_vector(
-        seq(
-          mcmc_nngp_list$useful_stuff$time_depth, 
-          mcmc_nngp_list$useful_stuff$n_time_periods - mcmc_nngp_list$useful_stuff$time_depth +1
-        ), 
-        target_size = 300
-      )
-      if(nrow(time_split)==1) time_markov_mat = matrix(1,1,1)
-      if(nrow(time_split)==2) time_markov_mat = matrix(1,2,2)
-      if(nrow(time_split)>2)
-      {
-        time_markov_mat = toeplitz(c(1,1,rep(0, nrow(time_split)-3), 1))
-        time_markov_mat[1, ncol(time_markov_mat)] = 0
-        time_markov_mat[ncol(time_markov_mat), 1] = 0
-      }
-      
-      ###########################
-      # Spatial basis functions #
-      ###########################
-      
-      # fixing maximum cluster size
-      cluster_size_target = 100
-      # partitioning the space into clusters whose size is lower than cluster_size_target
-      recursive_k_means_clust = recursive_k_means(locs_ = mcmc_nngp_list$useful_stuff$locs_repeated, cluster_size_target)
-      basis_functions = c(
-        # groups of spatial basis functions
-        unlist(lapply(
-          get_grids(
-            points = mcmc_nngp_list$useful_stuff$locs_repeated, 
-            cluster_size_target = cluster_size_target), 
-          function(x)get_basis_functions(
-            points = mcmc_nngp_list$useful_stuff$locs_repeated, 
-            tile_info = x, 
-            cluster_size_target = cluster_size_target, 
-            Vecchia_approx_DAG = mcmc_nngp_list$Vecchia_approx_DAG, 
-            useful_stuff = mcmc_nngp_list$useful_stuff)),
-          recursive = F)
-      )
-      # removing indicator basis functions to guarantee reversibility
-      # by construction the basis functions are independent
-      # removing the lowest index in order to reduce the number of colors
-      # as many removed indices as basis functions
-      removed_indices = rep(0, sum(sapply(basis_functions, ncol)))
-      candidate_loc_idx = seq(nrow(basis_functions[[1]]))
-      count = 1
-      # chosing witnesses of smallest order in Vecchia ordering
-      for(i_basis_function in seq(length(basis_functions)))
-      {
-        for(j in seq(ncol(basis_functions[[i_basis_function]])))
-        {
-          # choosing smallest index available among where basis function is != 0
-          removed_indices[count]= min(
-            candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
-            )
-          # forbidding index to be chosen again
-            candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)
-          ][which.min(
-            candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
-          )] = Inf
-          count = count+1
-        }
-      }
-      # test : does any basis function not have a witness ?
-      ## any(
-      ##   (
-      ##     Matrix::sparseVector(x = 1, i = removed_indices, length = nrow(basis_functions[[1]])) %*%
-      ##       (do.call(cbind, basis_functions)!=0)
-      ##   )==0)
-      recursive_k_means_clust$clust[removed_indices] = NA
-      basis_functions = 
-        c(
-          basis_functions, 
-          get_indicator_basis_functions (
-          recursive_k_means_clust = recursive_k_means_clust, 
-          useful_stuff = mcmc_nngp_list$useful_stuff)
-        )
-      
-      # basis_functions_nonzero = lapply(basis_functions, function(x)which(apply(x, 1, function(x)(any(x!=0)))))
-      
-      ##################################################
-      # coloring space-time groups for parallelization #
-      ##################################################
-      
-      coloring=  color_basis_functions_time_slicing(
-        basis_functions = basis_functions, 
-        precision_blocks = chain$stuff$precision_blocks, 
-        time_markov_mat = time_markov_mat
-        )
+      # creating space and time bases
+      list2env(
+        blocks_n_bases_with_witnesses(mcmc_nngp_list = mcmc_nngp_list, space_cluster_size_target = 120, time_target_size = 200),
+        envir =  globalenv()
+               )
+      max(coloring)
       colo = 4
       print(table(coloring))
       # looping on colors
       for(colo in seq(max(coloring)))
       { 
+        print(colo)
         t1 = Sys.time()
         # precision times latent field
         Q_field = vecchia_blocks_mult(
@@ -145,7 +61,6 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
           ,
           function(colo_idx)
           {
-            #system(sprintf('echo "\n%s\n"', paste0(colo_idx, collapse="")))
             i_time_split = floor((colo_idx-1) / length(basis_functions)) + 1
             i_basis_function = colo_idx - length(basis_functions) * (i_time_split - 1)
             time_begin = time_split[i_time_split,1]
@@ -184,7 +99,39 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             B_Q_B = lapply(chain$stuff$precision_blocks, function(x)Matrix::crossprod(basis_functions[[i_basis_function]], x) %*% basis_functions[[i_basis_function]])
             B_Q_B[[1]]=Matrix::forceSymmetric(B_Q_B[[1]], uplo = "L")
             prior_precision = get_block_toeplitz(B_Q_B, time_end- time_begin+1)
-            B_Q_field = (Matrix::crossprod(basis_functions[[i_basis_function]], Q_field[,seq(time_begin, time_end)]))
+            
+            # precision times latent field
+            t1 = Sys.time()
+            Q_field = vecchia_blocks_mult(
+              x = chain$params$field[,
+                                     seq(
+                                       time_begin-mcmc_nngp_list$useful_stuff$time_depth+1, 
+                                       time_end+mcmc_nngp_list$useful_stuff$time_depth-1)], # time markov blanket
+              vecchia_blocks = chain$stuff$vecchia
+            )
+            Q_field = Q_field[,
+                              -c(
+                                seq(mcmc_nngp_list$useful_stuff$time_depth-1), 
+                                seq((ncol(Q_field)- mcmc_nngp_list$useful_stuff$time_depth+2), ncol(Q_field)))]
+            # subsetting in order to keep only places where basis functions are non null
+            row_idx = which(as.vector(basis_functions[[i_basis_function]]%*% rep(1, ncol(basis_functions[[i_basis_function]]))!=0))
+            B_transposed_vecchia_blocks = chain$stuff$transposed_vecchia_blocks
+            B_transposed_vecchia_blocks$t_triangular_on_diag = 
+              Matrix::crossprod(basis_functions[[i_basis_function]],
+                                transposed_vecchia_blocks_$t_triangular_on_diag)
+            B_transposed_vecchia_blocks$t_rectangular_below_diag = 
+              lapply(transposed_vecchia_blocks_$t_rectangular_below_diag, 
+                     function(x)Matrix::crossprod(basis_functions[[i_basis_function]],x))
+            B_Q_field = vecchia_blocks_t_mult(
+              x = Q_field,
+              transposed_vecchia_blocks = B_transposed_vecchia_blocks
+            )
+            Sys.time()-t1
+           
+##            # precision times latent field
+##            t1 = Sys.time()
+##            tatato = Matrix::t(basis_functions[[i_basis_function]])%*%Q_field[,time_begin:time_end]
+##            Sys.time()-t1
            
             # posterior ####
             t1 = Sys.time()
