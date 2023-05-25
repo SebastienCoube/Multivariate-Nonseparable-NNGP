@@ -13,9 +13,9 @@ source("MultiNNGP/R/noise_variance.R")
 # synthetic data set #########
 
 # space time layout
-n_loc = 300
-n_var = 6
-n_time = 1500
+n_loc = 200
+n_var = 3
+n_time = 800
 locs_no_na = cbind(2*runif(n_loc), 1)
 
 

@@ -2,31 +2,10 @@
 # can be much more efficient 
 
 
-blocks_n_bases_with_witnesses = 
+
+get_blocks_n_bases_with_witnesses = 
   function(mcmc_nngp_list, 
-           time_target_size = 300, 
-           space_cluster_size_target = 100)
-{
-  ##################
-  # TIME SPLITTING #
-  ##################
-  # splitting the time period into chunks
-  time_split = split_vector(
-    seq(
-      mcmc_nngp_list$useful_stuff$time_depth, 
-      mcmc_nngp_list$useful_stuff$n_time_periods - mcmc_nngp_list$useful_stuff$time_depth +1
-    ), 
-    target_size = time_target_size
-  )
-###   # time markov mat
-###   if(nrow(time_split)==1) time_markov_mat = matrix(1,1,1)
-###   if(nrow(time_split)==2) time_markov_mat = matrix(1,2,2)
-###   if(nrow(time_split)>2)
-###   {
-###     time_markov_mat = toeplitz(c(1,1,rep(0, nrow(time_split)-3), 1))
-###     time_markov_mat[1, ncol(time_markov_mat)] = 0
-###     time_markov_mat[ncol(time_markov_mat), 1] = 0
-###   }
+           space_cluster_size_target = 100){
   ###########################
   # SPATIAL BASIS FUNCTIONS #
   ###########################
@@ -44,8 +23,6 @@ blocks_n_bases_with_witnesses =
         useful_stuff = mcmc_nngp_list$useful_stuff)),
       recursive = F)
   )
-  
-
   # partitioning the space into clusters whose size is lower than cluster_size_target
   recursive_k_means_clust = recursive_k_means(locs_ = mcmc_nngp_list$useful_stuff$locs_repeated, space_cluster_size_target)
   # removing indicator basis functions to guarantee reversibility
@@ -87,9 +64,7 @@ blocks_n_bases_with_witnesses =
         recursive_k_means_clust = recursive_k_means_clust, 
         useful_stuff = mcmc_nngp_list$useful_stuff)
     )
-  
-  
-  bases_coloring = 
+  spatial_coloring = 
     color_basis_functions(
       basis_functions = basis_functions, 
       precision_blocks = chain$stuff$precision_blocks
@@ -97,12 +72,16 @@ blocks_n_bases_with_witnesses =
   ############
   # COLORING #
   ############
-  coloring= rep(bases_coloring, nrow(time_split)) + rep(seq(nrow(time_split))%%2 * max(bases_coloring), each = length(bases_coloring))
-  return(list(basis_functions = basis_functions, time_split = time_split, coloring = coloring))
+  return(list(
+    basis_functions = basis_functions, 
+    spatial_coloring = spatial_coloring
+    ))
 }
 
 
 
+
+# split vectors of time with some randomness of frontier
 split_vector <- function(vec, target_size = 100) {
   n <- length(vec)
   k <- max(floor(n/target_size), 1)  # determine number of subvectors needed
@@ -120,6 +99,19 @@ split_vector <- function(vec, target_size = 100) {
       sapply(subvecs, function(x)x[length(x)])
     )
   )
+}
+
+
+get_time_split = function(time_depth, n_time_periods, time_target_size)
+{
+  time_split = split_vector(
+    seq(
+      time_depth, 
+      n_time_periods - time_depth +1
+    ), 
+    target_size = time_target_size
+  )
+  list(time_split = time_split, time_coloring = rep(seq(nrow(time_split))%%2))
 }
 
 recursive_k_means = function(locs_, cluster_size_target)
