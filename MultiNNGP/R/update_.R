@@ -18,14 +18,13 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
     #################################################################
     # Sampling the latent field using the "blocks 'n' bases" scheme #
     #################################################################
-    if(iter == 1 | iter/2 ==iter %/% 2)
-      t0 = Sys.time()
+    t0 = Sys.time()
     {
       # creating space and time bases
       list2env(
         get_blocks_n_bases_with_witnesses(
           mcmc_nngp_list = mcmc_nngp_list, 
-          space_cluster_size_target = 120),
+          space_cluster_size_target = 10),
         envir =  environment()
       )
       list2env(
@@ -129,7 +128,7 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
                 transposed_vecchia_blocks = B_transposed_vecchia_blocks
               )
               Sys.time()-t1
-             
+              
               # posterior ####
               t1 = Sys.time()
               posterior_chol = Matrix::chol(
@@ -174,53 +173,53 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             chain$params$field[,time_begin:time_end] = 
               as.matrix(
                 chain$params$field[,time_begin:time_end] +
-                basis_functions[[i_basis_function]] %*% eps[[eps_idx]]
+                  basis_functions[[i_basis_function]] %*% eps[[eps_idx]]
               )
           }
           print(Sys.time()-t1)
-  ### # works for 3 variables     
-  ###        plot(
-  ###          rep(mcmc_nngp_list$locs[,1], stuff_for_plots$n_var), 
-  ###          mcmc_nngp_list$y[,,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
-  ###          col = rep(c("lightgray", "lightpink", "lightblue"), each = mcmc_nngp_list$useful_stuff$n_loc), 
-  ###          cex = .3, pch = 15, 
-  ###        )
-  ###        points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
-  ###               chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
-  ###               cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx + (mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx==3)
-  ###        )
-  ###        
-  ###        plot(
-  ###          rep(mcmc_nngp_list$locs[,1], stuff_for_plots$n_var), 
-  ###          mcmc_nngp_list$y[,,mcmc_nngp_list$useful_stuff$buffer_depth + 15], 
-  ###          col = rep(c("lightgray", "lightpink", "lightblue"), 
-  ###                    each = mcmc_nngp_list$useful_stuff$n_loc), 
-  ###          cex = .3, pch = 15, 
-  ###        )
-  ###        points(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), y_true[,,10], 
-  ###               col = rep(c("black", "red", "blue"), 
-  ###                         each = stuff_for_plots$n_loc), 
-  ###               cex = .3, pch = 15, 
-  ###               xlab = "spatial site", 
-  ###               ylab = "latent field and true field" 
-  ###        )
+          ### # works for 3 variables     
+          ###        plot(
+          ###          rep(mcmc_nngp_list$locs[,1], stuff_for_plots$n_var), 
+          ###          mcmc_nngp_list$y[,,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
+          ###          col = rep(c("lightgray", "lightpink", "lightblue"), each = mcmc_nngp_list$useful_stuff$n_loc), 
+          ###          cex = .3, pch = 15, 
+          ###        )
+          ###        points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
+          ###               chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
+          ###               cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx + (mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx==3)
+          ###        )
+          ###        
+          ###        plot(
+          ###          rep(mcmc_nngp_list$locs[,1], stuff_for_plots$n_var), 
+          ###          mcmc_nngp_list$y[,,mcmc_nngp_list$useful_stuff$buffer_depth + 15], 
+          ###          col = rep(c("lightgray", "lightpink", "lightblue"), 
+          ###                    each = mcmc_nngp_list$useful_stuff$n_loc), 
+          ###          cex = .3, pch = 15, 
+          ###        )
+          ###        points(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), y_true[,,10], 
+          ###               col = rep(c("black", "red", "blue"), 
+          ###                         each = stuff_for_plots$n_loc), 
+          ###               cex = .3, pch = 15, 
+          ###               xlab = "spatial site", 
+          ###               ylab = "latent field and true field" 
+          ###        )
           #if(iter/10==iter%/%10){
-           plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,10], 
-                col = rep(c("lightgray", "lightpink", "lightgreen", "lightblue", "lightcyan", "lightpink"), each = stuff_for_plots$n_loc), 
-                cex = .3, pch = 15, 
-                xlab = "spatial site", 
-                ylab = "latent field and true field"
-           )
-            points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
-                   chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
-                   cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx
-            )
-  
+          plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,130], 
+               col = rep(c("lightgray", "lightpink", "lightgreen", "lightblue", "lightcyan", "lightpink"), each = stuff_for_plots$n_loc), 
+               cex = .3, pch = 15, 
+               xlab = "spatial site", 
+               ylab = "latent field and true field"
+          )
+          points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
+                 chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 130], 
+                 cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx
+          )
+          
           #}
         }
       }
     }
-      print(Sys.time()-t0)
+    print(Sys.time()-t0)
     #########################
     # Covariance parameters REMEMBER TO ADD A #
     #########################

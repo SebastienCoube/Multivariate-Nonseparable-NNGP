@@ -111,7 +111,7 @@ get_time_split = function(time_depth, n_time_periods, time_target_size)
     ), 
     target_size = time_target_size
   )
-  list(time_split = time_split, time_coloring = rep(seq(nrow(time_split))%%2))
+  list(time_split = time_split, time_coloring = rep(seq(nrow(time_split))%%2)+1)
 }
 
 recursive_k_means = function(locs_, cluster_size_target)
