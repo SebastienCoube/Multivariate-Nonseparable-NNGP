@@ -24,7 +24,8 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
       list2env(
         get_blocks_n_bases_with_witnesses(
           mcmc_nngp_list = mcmc_nngp_list, 
-          space_cluster_size_target = 10),
+          space_cluster_size_target = 120, 
+          chain = chain),
         envir =  environment()
       )
       list2env(
@@ -204,14 +205,14 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
           ###               ylab = "latent field and true field" 
           ###        )
           #if(iter/10==iter%/%10){
-          plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,130], 
+          plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,80], 
                col = rep(c("lightgray", "lightpink", "lightgreen", "lightblue", "lightcyan", "lightpink"), each = stuff_for_plots$n_loc), 
                cex = .3, pch = 15, 
                xlab = "spatial site", 
                ylab = "latent field and true field"
           )
           points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
-                 chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 130], 
+                 chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 80], 
                  cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx
           )
           

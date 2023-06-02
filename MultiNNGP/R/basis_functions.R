@@ -5,65 +5,85 @@
 
 get_blocks_n_bases_with_witnesses = 
   function(mcmc_nngp_list, 
-           space_cluster_size_target = 100){
-  ###########################
-  # SPATIAL BASIS FUNCTIONS #
-  ###########################
+           space_cluster_size_target = 100, 
+           chain, 
+           which_vars = NULL
+           ){
+  if(is.null(which_vars))which_vars = seq(mcmc_nngp_list$useful_stuff$n_var_y)
+  selected_idx = which(mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx%in%which_vars)
+  #spatial basis functions ####
   basis_functions = c(
     # groups of spatial basis functions
     unlist(lapply(
       get_grids(
-        points = mcmc_nngp_list$useful_stuff$locs_repeated, 
-        cluster_size_target = space_cluster_size_target), 
+        locs_repeated = mcmc_nngp_list$useful_stuff$locs_repeated[selected_idx,], 
+        cluster_size_target = space_cluster_size_target, 
+        max_depth = 4), 
       function(x)get_basis_functions(
-        points = mcmc_nngp_list$useful_stuff$locs_repeated, 
+        points = mcmc_nngp_list$useful_stuff$locs_repeated[selected_idx,], 
         tile_info = x, 
         cluster_size_target = space_cluster_size_target, 
         Vecchia_approx_DAG = mcmc_nngp_list$Vecchia_approx_DAG, 
-        useful_stuff = mcmc_nngp_list$useful_stuff)),
-      recursive = F)
+        useful_stuff = mcmc_nngp_list$useful_stuff, 
+        which_vars = which_vars, 
+        selected_idx = selected_idx) 
+      ), recursive = F)
   )
+  # blocks ####
   # partitioning the space into clusters whose size is lower than cluster_size_target
-  recursive_k_means_clust = recursive_k_means(locs_ = mcmc_nngp_list$useful_stuff$locs_repeated, space_cluster_size_target)
+  recursive_k_means_clust = recursive_k_means(locs_ = mcmc_nngp_list$useful_stuff$locs_repeated[selected_idx,], space_cluster_size_target)
   # removing indicator basis functions to guarantee reversibility
   # by construction the basis functions are independent
   # removing the lowest index in order to reduce the number of colors
   # as many removed indices as basis functions
-  removed_indices = rep(0, sum(sapply(basis_functions, ncol)))
-  candidate_loc_idx = seq(nrow(basis_functions[[1]]))
-  count = 1
-  # chosing witnesses of smallest order in Vecchia ordering
-  for(i_basis_function in seq(length(basis_functions)))
+  if(!is.null(basis_functions))
   {
-    for(j in seq(ncol(basis_functions[[i_basis_function]])))
+    removed_indices = rep(0, sum(sapply(basis_functions, ncol)))
+    candidate_loc_idx = seq(nrow(basis_functions[[1]]))
+    count = 1
+    # chosing witnesses of smallest order in Vecchia ordering
+    for(i_basis_function in seq(length(basis_functions)))
     {
-      # choosing smallest index available among where basis function is != 0
-      removed_indices[count]= min(
-        candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
-      )
-      # forbidding index to be chosen again
-      candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)
-      ][which.min(
-        candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
-      )] = Inf
-      count = count+1
+      for(j in seq(ncol(basis_functions[[i_basis_function]])))
+      {
+        # choosing smallest index available among where basis function is != 0
+        removed_indices[count]= min(
+          candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
+        )
+        # forbidding index to be chosen again
+        candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)
+        ][which.min(
+          candidate_loc_idx[which(basis_functions[[i_basis_function]][,j] != 0)]
+        )] = Inf
+        count = count+1
+      }
     }
+    # test : does any basis function not have a witness ?
+    ## any(
+    ##   (
+    ##     Matrix::sparseVector(x = 1, i = removed_indices, length = nrow(basis_functions[[1]])) %*%
+    ##       (do.call(cbind, basis_functions)!=0)
+    ##   )==0)
+    recursive_k_means_clust$clust[removed_indices] = NA
   }
-  # test : does any basis function not have a witness ?
-  ## any(
-  ##   (
-  ##     Matrix::sparseVector(x = 1, i = removed_indices, length = nrow(basis_functions[[1]])) %*%
-  ##       (do.call(cbind, basis_functions)!=0)
-  ##   )==0)
-  recursive_k_means_clust$clust[removed_indices] = NA
   # adding blocks to bases
   basis_functions = 
     c(
       basis_functions, 
-      get_indicator_basis_functions (
-        recursive_k_means_clust = recursive_k_means_clust, 
-        useful_stuff = mcmc_nngp_list$useful_stuff)
+      get_indicator_basis_functions(recursive_k_means_clust = recursive_k_means_clust)
     )
+  # putting var subset back into bigger matrix
+  basis_functions = lapply(
+    basis_functions, 
+    function(x){
+      x@Dim[1] = mcmc_nngp_list$useful_stuff$n_field
+      x@i = as.integer(selected_idx[x@i+1]-1)
+      x
+    })
+  # test if right variables are selected. Sould give only selected variables
+  # mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx[which(as.vector(
+  #   basis_functions[[2]]%*%rep(1, ncol(basis_functions[[2]])) !=0))]
+  # coloring
   spatial_coloring = 
     color_basis_functions(
       basis_functions = basis_functions, 
@@ -111,7 +131,7 @@ get_time_split = function(time_depth, n_time_periods, time_target_size)
     ), 
     target_size = time_target_size
   )
-  list(time_split = time_split, time_coloring = rep(seq(nrow(time_split))%%2)+1)
+  list(time_split = time_split, time_coloring = ((1+seq(nrow(time_split)))%%2)+1)
 }
 
 recursive_k_means = function(locs_, cluster_size_target)
@@ -144,13 +164,13 @@ recursive_k_means = function(locs_, cluster_size_target)
   res
 }
 
-get_indicator_basis_functions = function(recursive_k_means_clust, useful_stuff)
+get_indicator_basis_functions = function(recursive_k_means_clust)
 {
   lapply(as.vector(na.omit(unique(recursive_k_means_clust$clust))), function(i)
     Matrix::sparseMatrix(
       i = which(recursive_k_means_clust$clust==i),
       j = seq(sum(na.omit(recursive_k_means_clust$clust==i))),
-      x=1, dims = c(useful_stuff$n_field, sum(na.omit(recursive_k_means_clust$clust==i)))
+      x=1, dims = c(length(recursive_k_means_clust$clust), sum(na.omit(recursive_k_means_clust$clust==i)))
     )
   )
 }
@@ -200,14 +220,15 @@ color_basis_functions = function(basis_functions, precision_blocks)
 # Define the function to class the locs into square tiles
 class_points_into_tiles <- function(locs, tile_size) {
   # Compute the minimum and maximum x and y coordinates of the locs
-  min_x <- min(locs[,1])
-  max_x <- max(locs[,1])
-  min_y <- min(locs[,2])
-  max_y <- max(locs[,2])
+  min_x <- min(locs[,1]) - .00001
+  min_y <- min(locs[,2]) - .00001
+  
+  max_x <- max(locs[,1]) + .00001
+  max_y <- max(locs[,2]) + .00001
   
   # Compute the number of tiles in each dimension
-  n_x_tiles <- ceiling((max_x - min_x) / tile_size)+1
-  n_y_tiles <- ceiling((max_y - min_y) / tile_size)+1
+  n_x_tiles <- ceiling((max_x - min_x) / tile_size)
+  n_y_tiles <- ceiling((max_y - min_y) / tile_size)
   
   # Classify each point into a tile
   #tile_indices <- matrix(0, nrow = nrow(locs), ncol = 2)
@@ -216,24 +237,21 @@ class_points_into_tiles <- function(locs, tile_size) {
   #  y_tile <- ceiling((locs[i,2] - min_y +1e-8) / tile_size)
   #  tile_indices[i,] <- c(x_tile, y_tile)
   #}
-  
+  x_breaks = min_x + tile_size * seq(0, n_x_tiles)
+  y_breaks = min_y + tile_size * seq(0, n_y_tiles)
   tile_indices = cbind(
-    as.numeric(cut(locs[,1]+abs(rnorm(nrow(locs), 0, 1e-10)), breaks = unique(c(seq(min_x-.00001, max_x + .00001, tile_size), max_x)))), 
-    as.numeric(cut(locs[,2]+abs(rnorm(nrow(locs), 0, 1e-10)), breaks = unique(c(seq(min_y-.00001, max_y + .00001, tile_size), max_x))))
+    as.numeric(cut(locs[,1]+abs(rnorm(nrow(locs), 0, 1e-10)), breaks = x_breaks)), 
+    as.numeric(cut(locs[,2]+abs(rnorm(nrow(locs), 0, 1e-10)), breaks = y_breaks))
   )
   
-  tile_centers <- array(0, dim = c(n_x_tiles, n_y_tiles, 2))
-  #x_noise = tile_size* runif(1)
-  #y_noise = tile_size* runif(1)
-  for (i in 1:n_x_tiles) {
-    for (j in 1:n_y_tiles) {
-      x_center <- min_x + (i - 0.5) * tile_size# - x_noise
-      y_center <- min_y + (j - 0.5) * tile_size# - y_noise
-      tile_centers[i,j,] <- c(x_center, y_center)
-    }
-  }
+  tile_centers_x = matrix((x_breaks[-1] + x_breaks[-length(x_breaks)])/2)
+  tile_centers_y = matrix((y_breaks[-1] + y_breaks[-length(y_breaks)])/2)
+  
   # Return the tile indices and centers
-  return(list(tile_indices = tile_indices, tile_centers = tile_centers, tile_size = tile_size))
+  return(list(tile_indices = tile_indices, 
+              tile_centers_x = tile_centers_x, 
+              tile_centers_y = tile_centers_y, 
+              tile_size = tile_size))
 }
 
 ## Example usage
@@ -245,22 +263,26 @@ class_points_into_tiles <- function(locs, tile_size) {
 #tile_info <- class_points_into_tiles(points, tile_size)
 
 
-get_grids = function(points, cluster_size_target)
+get_grids = function(locs_repeated, cluster_size_target, max_depth = 5)
 {
-  d_max = max(apply(points, 2, max)- apply(points, 2, min))
+  d_max = max(apply(locs_repeated, 2, max)- apply(locs_repeated, 2, min))
   tile_size = d_max/11.9
+  tile_info = class_points_into_tiles(locs_repeated, tile_size)
   res = list()
-  tile_info = class_points_into_tiles(points, tile_size)
   res[[1]] = tile_info
   tatato = 1
-  while(any(table(tile_info$tile_indices[,1], tile_info$tile_indices[,2])>ceiling(sqrt(cluster_size_target)))){
+  while(
+    (tatato<max_depth+1)&
+    (max(table(tile_info$tile_indices[,1], tile_info$tile_indices[,2]))>ceiling(sqrt(cluster_size_target)))
+    )
+  {
     tile_size = tile_size/ceiling(sqrt(cluster_size_target))
-    tile_info = class_points_into_tiles(points, tile_size)
     tatato = tatato +1
+    tile_info = class_points_into_tiles(locs_repeated, tile_size)
     res[[tatato]] = tile_info
   }
   res[length(res)]=NULL
-  #plot(points, col = interaction(tile_info$tile_indices[,1], tile_info$tile_indices[,2]))
+  #plot(locs_repeated, col = interaction(tile_info$tile_indices[,1], tile_info$tile_indices[,2]))
   #table(interaction(tile_info$tile_indices[,1], tile_info$tile_indices[,2]))
   return(res)
 }
@@ -278,7 +300,7 @@ get_grids = function(points, cluster_size_target)
 #tile_info = grids[[9]]
 
 
-get_basis_functions = function(points, tile_info, cluster_size_target, Vecchia_approx_DAG, useful_stuff)
+get_basis_functions = function(points, tile_info, cluster_size_target, Vecchia_approx_DAG, useful_stuff, which_vars, selected_idx)
 {
   size_table = table(tile_info$tile_indices[,1], tile_info$tile_indices[,2])>ceiling(sqrt(cluster_size_target))
   active_centers = list()
@@ -286,16 +308,23 @@ get_basis_functions = function(points, tile_info, cluster_size_target, Vecchia_a
   j_idx = list()
   x = list()
   # looping on the grid
-  for(center_i in seq(nrow(tile_info$tile_centers)))
+  for(center_i in seq(nrow(tile_info$tile_centers_x)))
   {
-    for(center_j in seq(ncol(tile_info$tile_centers)))
+    for(center_j in seq(ncol(tile_info$tile_centers_y)))
     {
       # selecting tiles of the grid with more than cluster_size_target points in it
       if(!is.na(size_table[match(center_i, row.names(size_table)),match(center_j, colnames(size_table))])){
         if(size_table[match(center_i, row.names(size_table)),match(center_j, colnames(size_table))])
         {
           # appending current center to active centers
-          active_centers = c(active_centers, list(tile_info$tile_centers[center_i, center_j,]))
+          active_centers = c(active_centers, 
+                             list(
+                               c(
+                                 tile_info$tile_centers_x[center_i], 
+                                 tile_info$tile_centers_y[center_j]
+                               )
+                             )
+          )
           # selecting locs in adjacent tiles
           selected_locs = 
             which(
@@ -307,7 +336,11 @@ get_basis_functions = function(points, tile_info, cluster_size_target, Vecchia_a
           # indices of spatial basis function
           i_idx = c(i_idx, list(selected_locs))
           x = c(x, list(c(exp(-(fields::rdist(
-            x1 = matrix(tile_info$tile_centers[center_i, center_j,], ncol = 2), 
+            x1 = matrix(c(
+              tile_info$tile_centers_x[center_i], 
+              tile_info$tile_centers_y[center_j]
+            )
+            , ncol = 2), 
             x2 = points[selected_locs,]
             )^2/tile_info$tile_size^2)))))
         }
@@ -319,14 +352,13 @@ get_basis_functions = function(points, tile_info, cluster_size_target, Vecchia_a
   basis_functions = mapply(
     function(ii, xx)Matrix::sparseMatrix(
       i = ii, 
-      j = Vecchia_approx_DAG$field_position$var_idx[ii], 
-      x = xx, dims = c(useful_stuff$n_field, useful_stuff$n_var_y)
-    ), 
+      j = match(Vecchia_approx_DAG$field_position$var_idx[selected_idx][ii], which_vars), 
+      x = xx, dims = c(nrow(points), length(which_vars))), 
     ii = i_idx, 
     xx = x
   )
   # removing all  zero columns
-  basis_functions = lapply(basis_functions, function(x)x[,which(as.vector(rep(1, nrow(x)) %*% x) !=0)])
+  basis_functions = lapply(basis_functions, function(x)x[,which(as.vector(rep(1, nrow(x)) %*% x) !=0), drop = F])
   
   
   center_split = recursive_k_means(
@@ -340,7 +372,7 @@ get_basis_functions = function(points, tile_info, cluster_size_target, Vecchia_a
 }
 
 
-#spatial_basis_functions = do.call(c, lapply(grids, function(g)get_basis_functions(points = points, tile_info = g, cluster_size_target = cluster_size_target, Vecchia_approx_DAG = Vecchia_approx_DAG, useful_stuff = useful_stuff)))
+#spatial_basis_functions = do.call(c, lapply(grids, function(g)get_basis_functions(locs_repeated = locs_repeated, tile_info = g, cluster_size_target = cluster_size_target, Vecchia_approx_DAG = Vecchia_approx_DAG, useful_stuff = useful_stuff)))
 #plot(locs_[,1], spatial_basis_functions[[73]][,1])
 #plot(locs_[,1], spatial_basis_functions[[20]][,8])
 #plot(locs_[,1], spatial_basis_functions[[1]][,8])
