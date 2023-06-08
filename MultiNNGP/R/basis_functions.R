@@ -5,20 +5,21 @@
 
 get_blocks_n_bases_with_witnesses = 
   function(mcmc_nngp_list, 
-           space_cluster_size_target = 100, 
+           space_cluster_size_target = 120, 
            chain, 
            which_vars = NULL
            ){
   if(is.null(which_vars))which_vars = seq(mcmc_nngp_list$useful_stuff$n_var_y)
   selected_idx = which(mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx%in%which_vars)
   #spatial basis functions ####
-  basis_functions = c(
+  basis_functions = 
+    c(
     # groups of spatial basis functions
     unlist(lapply(
       get_grids(
         locs_repeated = mcmc_nngp_list$useful_stuff$locs_repeated[selected_idx,], 
         cluster_size_target = space_cluster_size_target, 
-        max_depth = 4), 
+        max_depth = 5), 
       function(x)get_basis_functions(
         points = mcmc_nngp_list$useful_stuff$locs_repeated[selected_idx,], 
         tile_info = x, 

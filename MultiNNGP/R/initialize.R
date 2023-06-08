@@ -289,8 +289,7 @@ make_one_chain = function(mcmc_nngp_list)
                                                       time_begin = 1, time_end = mcmc_nngp_list$useful_stuff$n_time_periods)
   
   chain$kernels = list()
-  chain$kernels$var_wise_ancillary =  rep(-3, mcmc_nngp_list$useful_stuff$n_var_y)
-  chain$kernels$var_wise_sufficient = rep(-3, mcmc_nngp_list$useful_stuff$n_var_y)
+  chain$kernels$var_wise =  rep(-3, mcmc_nngp_list$useful_stuff$n_var_y)
 
   return(chain)
 }

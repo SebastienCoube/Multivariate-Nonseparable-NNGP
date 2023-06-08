@@ -1,3 +1,4 @@
+
 homeostasy  = function(log_var, accepted, target  = .25, eps = .01)
 {
   if(accepted) log_var = log_var + eps * (1-target)
@@ -65,7 +66,7 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
       print(paste("var_idx=", var_idx))
       
       # sampling proposal ####
-      proposal = rnorm(2, sd = exp(.5*chain$kernels$var_wise_ancillary[var_idx]))
+      proposal = rnorm(2, sd = exp(.5*chain$kernels$var_wise[var_idx]))
       # proposing range ####
       proposed_log_range_vec = chain$params$log_range_vec
 #      proposed_log_range_vec[var_idx] = 
@@ -112,10 +113,17 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
         list2env(
           get_blocks_n_bases_with_witnesses(
             mcmc_nngp_list = mcmc_nngp_list, 
-            space_cluster_size_target = 120, 
+            space_cluster_size_target = 3, 
             chain = chain, which_vars = var_idx),
           envir =  environment()
         )
+#basis_functions = list(Matrix::sparseMatrix(
+#  i = which(Vecchia_approx_DAG$field_position$var_idx==1), 
+#  j = seq(sum(Vecchia_approx_DAG$field_position$var_idx==1)), 
+#  dims = c(mcmc_nngp_list$useful_stuff$n_field, sum(Vecchia_approx_DAG$field_position$var_idx==1))
+#  ))
+## basis_functions = basis_functions [1]
+## spatial_coloring=1
         list2env(
           get_time_split(
             time_depth = mcmc_nngp_list$useful_stuff$time_depth, 
@@ -123,6 +131,8 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             time_target_size = 100),
           envir =  environment()
         )
+#time_split[1,2] = 25
+#time_split[1,1] = 5
         # proposal of new field and transition ratio #####
         field_proposal = 
           latent_field_blocked_sampling(
@@ -143,7 +153,7 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
             transposed_vecchia_blocks = chain$stuff$transposed_vecchia_blocks, 
             noise_precisions = chain$stuff$noise_precisions)
         # checking the reverse field proposal goes back to initial field
-        # hist(reverse_field_proposal_density$field - chain$params$field)
+        # summary(c(reverse_field_proposal_density$field - chain$params$field))
         start_density = covparms_and_latent_field_density(
           field = chain$params$field, 
           vecchia_blocks = chain$stuff$vecchia_blocks, 
@@ -157,23 +167,65 @@ do_100_updates = function(chain, mcmc_nngp_list, kernel_learning_rate, thinning_
           mcmc_nngp_list = mcmc_nngp_list
         )
         
-        print(
-          end_density-
-            start_density+
-            reverse_field_proposal_density$transition_logdens-
-            field_proposal$transition_logdens
+        plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,10], 
+            col = rep(c("lightgray", "lightpink", "lightgreen", "lightblue", "lightcyan", "lightpink"), each = stuff_for_plots$n_loc), 
+            cex = .3, pch = 15, 
+            xlab = "spatial site", 
+            ylab = "latent field and true field"
         )
+        points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
+              field_proposal$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 10], 
+              cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx
+        )
+        
+        #####
+        # in order to check density : 
+        # 1) set innovation of covparms to be 0
+        # 2) make number of observations so small (~50) that there is only one cluster
+        # 3) log diff should be 0 because it corresponds to 
+        #    analytical sampling of the latent field
+        print(
+          ( 
+            end_density-
+              start_density
+          )          +
+            (
+              reverse_field_proposal_density$transition_logdens
+              -
+                field_proposal$transition_logdens
+            )
+        )
+        
+        chain$params$field = field_proposal$field
+        
+        
         if(
           (
             # should be 0 if covariance parameters not moved
-            end_density-
-            start_density+
-            reverse_field_proposal_density$transition_logdens-
+           ( 
+             end_density-
+            start_density
+            )+
+            (
+              reverse_field_proposal_density$transition_logdens-
             field_proposal$transition_logdens
+            )
           )>log(runif(1))
+        ){
+          print("tatato!")
+          chain$params$field = field_proposal$field
+          }
+        plot(rep(stuff_for_plots$locs_no_na[,1], stuff_for_plots$n_var), stuff_for_plots$y_true[,,20], 
+             col = rep(c("lightgray", "lightpink", "lightgreen", "lightblue", "lightcyan", "lightpink"), each = stuff_for_plots$n_loc), 
+             cex = .3, pch = 15, 
+             xlab = "spatial site", 
+             ylab = "latent field and true field"
+        )
+        points(mcmc_nngp_list$locs[mcmc_nngp_list$Vecchia_approx_DAG$field_position$location_idx,1], 
+               chain$params$field[,mcmc_nngp_list$useful_stuff$buffer_depth + 20], 
+               cex = .3, pch = 1, col = mcmc_nngp_list$Vecchia_approx_DAG$field_position$var_idx
         )
         
-        print(Sys.time()-t1)
       }
       # updating kernel
       chain$kernels$var_wise_ancillary[var_idx] = homeostasy(

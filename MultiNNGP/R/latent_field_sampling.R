@@ -1,7 +1,4 @@
 
-B Q FIELD WRONG, CHECK CONDITIONAL FORMULA
-
-
 # get precision blocks. Each block corresponds to a time lag, the first being lag = 0
 # precision blocks starting from diag and going towards the bottom or the left
 
@@ -124,7 +121,6 @@ get_precision_block_chol = function(B_tau_B, B_Q_B)
   }
 }
 
-
 DSATUR = function(M)
 {
   n = ncol(M)
@@ -236,7 +232,8 @@ latent_field_blocked_sampling = function(
     for(spatial_color in seq(max(spatial_coloring)))
     { 
       # contribution of observations to field mean
-      y_minus_field = field - mcmc_nngp_list$useful_stuff$y_loc_var_format_no_NA
+      y_minus_field = field - mcmc_nngp_list$useful_stuff$y_loc_var_format
+      y_minus_field[is.na(y_minus_field)] = 0
       tau_y_minus_field = do.call(cbind, mapply(function(x,y) as.vector(Matrix::crossprod(x, y)), noise_precisions, split(y_minus_field, col(y_minus_field)), SIMPLIFY = F))
       # index of selected spatial basis functions and time periods
       space_time_idx = unlist(
@@ -247,7 +244,7 @@ latent_field_blocked_sampling = function(
       )
       space_time_couple = space_time_idx[[1]]
       transitions = parallel::mclapply(
-        mc.cores = 8, space_time_idx
+        mc.cores = 1, space_time_idx
         ,
         function(space_time_couple)
         {
@@ -256,6 +253,9 @@ latent_field_blocked_sampling = function(
           time_begin = time_split[i_time_split,1]
           time_end   = time_split[i_time_split,2]
           
+          
+          print(paste("basis function", i_basis_function))
+          print(paste("time split", i_time_split))
           # part with observations ####
           # contribution to the mean 
           B_tau_y_minus_field = Matrix::crossprod(basis_functions[[i_basis_function]], tau_y_minus_field[,seq(time_begin, time_end)])
@@ -285,33 +285,37 @@ latent_field_blocked_sampling = function(
           
           # contribution to the mean
           # precision times latent field
-          Q_field = vecchia_blocks_mult(
+          B_Q_field = vecchia_blocks_mult(
             x = field[,
                       seq(
                         time_begin-mcmc_nngp_list$useful_stuff$time_depth+1, 
                         time_end+mcmc_nngp_list$useful_stuff$time_depth-1)], # time markov blanket
             vecchia_blocks = vecchia_blocks
           )
-          Q_field = Q_field[,
-                            -c(
-                              seq(mcmc_nngp_list$useful_stuff$time_depth-1), 
-                              seq((ncol(Q_field)- mcmc_nngp_list$useful_stuff$time_depth+2), ncol(Q_field)))]
           # subsetting in order to keep only places where basis functions are non null
           row_idx = which(as.vector(basis_functions[[i_basis_function]]%*% rep(1, ncol(basis_functions[[i_basis_function]]))!=0))
-          B_transposed_vecchia_blocks = transposed_vecchia_blocks
-          B_transposed_vecchia_blocks$t_triangular_on_diag = 
-            Matrix::crossprod(basis_functions[[i_basis_function]],
-                              B_transposed_vecchia_blocks$t_triangular_on_diag)
-          B_transposed_vecchia_blocks$t_rectangular_below_diag = 
-            lapply(B_transposed_vecchia_blocks$t_rectangular_below_diag, 
-                   function(x)Matrix::crossprod(basis_functions[[i_basis_function]],x))
           B_Q_field = vecchia_blocks_t_mult(
-            x = Q_field,
-            transposed_vecchia_blocks = B_transposed_vecchia_blocks
+            x = B_Q_field,
+            transposed_vecchia_blocks = transposed_vecchia_blocks
           )
+          B_Q_field = B_Q_field[,
+                            -c(
+                              seq(mcmc_nngp_list$useful_stuff$time_depth-1), 
+                              seq((ncol(B_Q_field)- mcmc_nngp_list$useful_stuff$time_depth+2), ncol(B_Q_field)))]
+          B_Q_field = Matrix::crossprod(basis_functions[[i_basis_function]], B_Q_field)
+          
+          ## Check B_Q_field 
+          ## Q_field = vecchia_blocks_mult(
+          ##   x = field, # time markov blanket
+          ##   vecchia_blocks = vecchia_blocks
+          ## )
+          ## Q_field = vecchia_blocks_t_mult(
+          ##   x = Q_field, # time markov blanket
+          ##   transposed_vecchia_blocks = transposed_vecchia_blocks
+          ## )
+          ## print(sum(abs(B_Q_field-Matrix::crossprod(basis_functions[[i_basis_function]], Q_field[,time_begin:time_end]))))
           
           # posterior #####
-          
           t1 = Sys.time()
           posterior_chol = Matrix::chol(
             Matrix::sparseMatrix(
@@ -332,30 +336,34 @@ latent_field_blocked_sampling = function(
             )
           )
           # sampling coefficients if field is sampled ####
-          eps = NULL
-          if(is.null(epsilon[[i_time_split]][[i_basis_function]])){
-            eta = 
-0* 
-              rnorm(length(cond_mean_precursor))
-            
-            eps =
+          eps = epsilon[[i_time_split]][[i_basis_function]]
+
+  if(is.null(eps)){
+eps = matrix(cond_mean_precursor, nrow = ncol(basis_functions[[i_basis_function]])) 
+eps[]=0
+if(T#i_basis_function%in%c(1)
+   ){
+            eps = 
               matrix(
                 Matrix::solve(
                   posterior_chol, 
-                  eta
-                  + cond_mean_precursor
+                    rnorm(length(cond_mean_precursor)) + 
+                    cond_mean_precursor
                 ), 
                 nrow = ncol(basis_functions[[i_basis_function]])
               )
+}
           }
-          # evaluating backward density if field is not sampled ####
-          if(!is.null(epsilon[[i_time_split]][[i_basis_function]])){
-            # solving equation : eps = solve(posterior_chol, eta + cond_mean_precursor)
-            eta = posterior_chol %*% c(epsilon[[i_time_split]][[i_basis_function]]) - cond_mean_precursor
-          }
+          #print(summary(as.vector(cond_mean_precursor)))
+          #print(summary(as.vector(posterior_chol %*% c(eps) - cond_mean_precursor)))
+          print(summary(c(eps)))
+          print(- .5 * sum((posterior_chol %*% c(eps) - cond_mean_precursor)^2))
           # transition density #### 
-          transition_density = sum(log(Matrix::diag(posterior_chol)))  - # determinant of posterior precision
-            .5 * sum(eta^2) 
+          transition_density = 
+            (
+#sum(log(Matrix::diag(posterior_chol))) # determinant of posterior precision
+              - .5 * sum((posterior_chol %*% c(eps) - cond_mean_precursor)^2)
+            )
           # returning
           return(
             list("eps" = eps, "transition_density" = transition_density)
@@ -406,11 +414,20 @@ covparms_and_latent_field_density =
            noise_precisions, 
            mcmc_nngp_list
            ){
-    y_minus_field = field - mcmc_nngp_list$useful_stuff$y_loc_var_format_no_NA
+    y_minus_field = field - mcmc_nngp_list$useful_stuff$y_loc_var_format
+    y_minus_field[is.na(y_minus_field)] = 0
     return(
-      (mcmc_nngp_list$useful_stuff$n_time_periods - mcmc_nngp_list$useful_stuff$time_depth+1) * sum(log(Matrix::diag(vecchia_blocks$triangular_on_diag)))
-      -.5 * sum(vecchia_blocks_mult(x = field, vecchia_blocks = vecchia_blocks)^2) 
-      -.5 * Reduce("+", mapply(function(x,y) as.vector(y %*% Matrix::crossprod(x, y)), noise_precisions, split(y_minus_field, col(y_minus_field)), SIMPLIFY = F))
+      (
+        (mcmc_nngp_list$useful_stuff$n_time_periods - mcmc_nngp_list$useful_stuff$time_depth+1) * 
+        sum(log(Matrix::diag(vecchia_blocks$triangular_on_diag)))
+        -.5 * sum(vecchia_blocks_mult(x = field, vecchia_blocks = vecchia_blocks)^2) 
+        -.5 * sum(
+          mapply(function(x,y) as.vector(y %*% Matrix::crossprod(x, y)), 
+                 noise_precisions, 
+                 split(y_minus_field, col(y_minus_field)))
+        )
+      )
     )
   }
+
 

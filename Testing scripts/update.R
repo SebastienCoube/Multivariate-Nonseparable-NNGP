@@ -13,24 +13,23 @@ source("MultiNNGP/R/noise_variance.R")
 # synthetic data set #########
 
 # space time layout
-n_loc = 2000
-n_var = 3
-n_time = 2000
+n_loc = 500
+n_var = 2
+n_time = 50
 locs_no_na = cbind(2*runif(n_loc), 1)
-
 
 # meters
 rho_vec = rep(.8, n_var*(n_var-1)/2)
 nu_vec = seq(n_var)/n_var+.5
-log_range_vec = log(rep(.05, n_var))
+log_range_vec = log(rep(.002, n_var))
 A_vec = rep(.5, n_var)
 a =       .5
 b =       1
 delta=    .5
 lambda =  .5
 
-cc =      .05
-r =       .05
+cc = 10# .05
+r =  10#  .05
 
 # sampling latent field
 Vecchia_approx_DAG_no_NA = make_simple_Vecchia_approx_DAG(
@@ -51,8 +50,9 @@ tatato = vecchia_blocks_solve(vecchia_blocks = vecchia_blocks_no_NA,
 
 y_true = aperm(array(tatato[-seq(n_loc*n_var*25)], c(n_var, n_loc, n_time)), c(2,1,3))
 plot(rep(locs_no_na[,1], n_var), y_true[,,1], col = rep(seq(n_var), each = n_loc), cex = .3, pch = 15)
-plot(rep(locs_no_na[,1], n_var), y_true[,,50], col = rep(seq(n_var), each = n_loc), cex = .3, pch = 15)
-plot(rep(locs_no_na[,1], n_var), y_true[,,100], col = rep(seq(n_var), each = n_loc), cex = .3, pch = 15)
+plot(rep(locs_no_na[,1], n_var), y_true[,,2], col = rep(seq(n_var), each = n_loc), cex = .3, pch = 15)
+plot(rep(locs_no_na[,1], n_var), y_true[,,3], col = rep(seq(n_var), each = n_loc), cex = .3, pch = 15)
+#plot(rep(locs_no_na[,1], n_var), y_true[,,100], col = rep(seq(n_var), each = n_loc), cex = .3, pch = 15)
 
 # observed data set
 
@@ -66,6 +66,7 @@ y[5,,]=NA
 
 #adding noise
 y = y + rnorm(length(y))
+
 
 # dropping all NA idx
 all_NA_idx = apply(y, c(1, 3), function(x)all(is.na(x)))
